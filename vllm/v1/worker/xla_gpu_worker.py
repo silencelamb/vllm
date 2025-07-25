@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-"""A TPU worker class."""
+"""An XLA GPU worker class."""
 import os
 from typing import Optional
 
@@ -20,18 +20,20 @@ from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
 from vllm.platforms import current_platform
 from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE, cdiv
-from vllm.v1.attention.backends.pallas import TPU_HEAD_SIZE_ALIGNMENT
 from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.kv_cache_interface import (AttentionSpec, KVCacheConfig,
                                         KVCacheSpec)
 from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.utils import bind_kv_cache, report_usage_stats
-from vllm.v1.worker.tpu_model_runner import TPUModelRunner
+from vllm.v1.worker.xla_gpu_model_runner import XlaGpuModelRunner
 
 logger = init_logger(__name__)
 
+# XLA GPU specific constants
+XLA_GPU_HEAD_SIZE_ALIGNMENT = 8  # GPU typically aligns to 8 bytes
 
-class TPUWorker:
+
+class XlaGpuWorker:
 
     def __init__(
         self,
@@ -50,6 +52,7 @@ class TPUWorker:
         self.parallel_config = vllm_config.parallel_config
         self.use_spmd = envs.VLLM_XLA_USE_SPMD
         self.original_parallel_config = None
+        
         if self.use_spmd:
             # Under SPMD mode, distributed env is initialized as if there is
             # only one worker/device.
@@ -57,6 +60,7 @@ class TPUWorker:
             self.parallel_config.tensor_parallel_size = 1
             self.parallel_config.pipeline_parallel_size = 1
             self.parallel_config.world_size = 1
+            
         self.scheduler_config = vllm_config.scheduler_config
         self.device_config = vllm_config.device_config
         self.speculative_config = vllm_config.speculative_config
@@ -79,17 +83,14 @@ class TPUWorker:
             from vllm.utils import init_cached_hf_modules
             init_cached_hf_modules()
 
-        # Delay profiler initialization to the start of the profiling.
-        # This is because in vLLM V1, MP runtime is initialized before the
-        # TPU Worker is initialized. The profiler server needs to start after
-        # MP runtime is initialized.
+        # XLA GPU profiling setup
         self.profiler = None
         self.profile_dir = None
         if envs.VLLM_TORCH_PROFILER_DIR and self.rank < 1:
-            # For TPU, we can only have 1 active profiler session for 1 profiler
-            # server. So we only profile on rank0.
+            # For XLA GPU, we can profile on multiple ranks simultaneously
+            # but typically only profile on rank 0 to reduce overhead
             self.profile_dir = envs.VLLM_TORCH_PROFILER_DIR
-            logger.info("Profiling enabled. Traces will be saved to: %s",
+            logger.info("XLA GPU Profiling enabled. Traces will be saved to: %s",
                         self.profile_dir)
 
         if self.model_config.seed is None:
@@ -101,76 +102,92 @@ class TPUWorker:
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
     def init_device(self):
-        os.environ["PJRT_DEVICE"] = "TPU"
-        # Note: Currently the XLA compiler wrongly uses 2D ring strategy on 1D
-        # ring, the xla tpu compiler flag
-        # `xla_tpu_force_1d_allreduce_at_chunk_count` is a temporary solution to
-        # fix this. It will be removed after the bug in XLA compiler is fixed.
-        os.environ["LIBTPU_INIT_ARGS"] = (
-            os.environ.get("LIBTPU_INIT_ARGS", "") +
-            " --xla_tpu_force_1d_allreduce_at_chunk_count=1"
-            " --xla_jf_conv_input_fusion=False")
-        # --xla_jf_conv_input_fusion=False is used to improve the perf of
-        # quantized matmul.
+        """Initialize XLA GPU device environment."""
+        
+        # Set XLA GPU environment variables
+        os.environ["PJRT_DEVICE"] = "CUDA"  # XLA GPU uses CUDA backend
+        
+        # XLA GPU optimization flags
+        xla_flags = [
+            "--xla_gpu_enable_triton_gemm=true",  # Enable Triton GEMM
+            "--xla_gpu_enable_async_collectives=true",  # Async collective communications
+            "--xla_gpu_enable_latency_hiding_scheduler=true",  # Latency hiding scheduler
+            "--xla_gpu_enable_highest_priority_async_stream=true",  # High priority async streams
+        ]
+        
+        # Add SPMD-specific flags if enabled
+        if self.use_spmd:
+            xla_flags.extend([
+                "--xla_gpu_enable_xla_runtime_executable=true",
+                "--xla_gpu_enable_command_buffer=true",
+            ])
+        
+        # Set XLA flags
+        existing_flags = os.environ.get("XLA_FLAGS", "")
+        new_flags = " ".join(xla_flags)
+        if existing_flags:
+            os.environ["XLA_FLAGS"] = f"{existing_flags} {new_flags}"
+        else:
+            os.environ["XLA_FLAGS"] = new_flags
+        
+        # Disable gradient computation
         torch.set_grad_enabled(False)
         torch.set_default_dtype(self.model_config.dtype)
 
-        # Initialize the distributed environment.
-        self._init_tpu_worker_distributed_environment(
+        # Initialize distributed environment
+        self._init_xla_gpu_worker_distributed_environment(
             self.parallel_config, self.rank, self.distributed_init_method,
             self.local_rank)
 
-        # Device initialization should happen after initializing
-        # the distributed runtime.
+        # Device initialization should happen after distributed environment setup
         self.device = xm.xla_device()
         self.device_config.device = self.device
+        
+        logger.info(f"XLA GPU Worker {self.rank} initialized on device: {self.device}")
 
-        # Set random seed.
+        # Set random seed
         set_random_seed(self.model_config.seed)
         if self.model_config.seed is not None:
             xm.set_rng_state(self.model_config.seed, self.device)
 
-        # Increase the cache size limit, which is the maximum number of
-        # dynamo graphs that can be compiled.
-        # TODO (NickLucche) On gsm we compile 80+ graphs.
-        # Re-evaluate limit, with MM we may get close to this limit.
-        torch._dynamo.config.cache_size_limit = 128
-        # Use persistent cache to avoid XLA recompilation.
-        # NOTE(woosuk): Set per-rank cache path since different ranks
-        # can have slightly different XLA graphs.
+        # Increase Dynamo cache size limit
+        # XLA GPU typically needs larger cache to store compiled computation graphs
+        torch._dynamo.config.cache_size_limit = 256  # Larger than TPU
+        
+        # Set up XLA persistent cache
         world_size = self.parallel_config.world_size
         rank = xr.global_ordinal()
-        # The PyTorch/XLA compilation cache uses the Torch IR to generate keys.
-        # Consequently, changes in optimization flags, which affect compilation
-        # results, don't change the cache key. This can result in the wrong
-        # compilation being used. To prevent this, disabling the XLA compilation
-        # cache during development is recommended.We can disable it by
-        # `export VLLM_XLA_CACHE_PATH=`
+        
         if envs.VLLM_XLA_CACHE_PATH:
             per_rank_path = os.path.join(envs.VLLM_XLA_CACHE_PATH,
-                                         f"tp{world_size}_rank{rank}")
+                                         f"xla_gpu_tp{world_size}_rank{rank}")
+            os.makedirs(per_rank_path, exist_ok=True)
             xr.initialize_cache(per_rank_path, readonly=False)
+            logger.info(f"XLA compilation cache initialized at: {per_rank_path}")
 
-        # Init ModelRunner here, so that we have access to self.device.
-        self.model_runner = \
-            TPUModelRunner(self.vllm_config, self.device,
-                           self.original_parallel_config)
+        # Initialize ModelRunner
+        self.model_runner = XlaGpuModelRunner(
+            self.vllm_config, 
+            self.device,
+            self.original_parallel_config
+        )
 
         if rank == 0:
-            # If usage stat is enabled, collect relevant info.
+            # Collect usage statistics
             report_usage_stats(self.vllm_config)
 
     def determine_available_memory(self) -> int:
+        """Determine available memory on XLA GPU."""
+        
         kv_caches: dict[str, torch.Tensor] = {}
         kv_cache_spec = self.model_runner.get_kv_cache_spec()
+        
         for layer_name, layer_spec in kv_cache_spec.items():
             if isinstance(layer_spec, AttentionSpec):
                 dtype = layer_spec.dtype
-
-                # Use an empty tensor instead of `None`` to force Dynamo to pass
-                # it by reference, rather by specializing on the value ``None``.
-                tpu_kv_cache = torch.tensor([], dtype=dtype).to(self.device)
-                kv_caches[layer_name] = tpu_kv_cache
+                # Create empty tensor for memory profiling
+                xla_gpu_kv_cache = torch.tensor([], dtype=dtype).to(self.device)
+                kv_caches[layer_name] = xla_gpu_kv_cache
             else:
                 raise NotImplementedError(
                     f"Unsupported KV cache spec '{type(layer_spec)}'")
@@ -181,136 +198,166 @@ class TPUWorker:
             self.vllm_config.compilation_config.static_forward_context,
             runner_kv_caches)
 
-        # `max_num_tokens >= max_num_batched_tokens` due to padding.
+        # Run profiling to determine memory usage
         with self.model_runner.maybe_setup_dummy_loras(self.lora_config):
             self.model_runner.profile_run(self.model_runner.max_num_tokens)
 
-        # Synchronize before measuring the memory usage.
+        # Wait for all XLA operations to complete
         xm.wait_device_ops()
 
-        # During the profiling run, the model runs without KV cache. After
-        # the profiling run, the model always runs with KV cache. Here we clear
-        # the dynamo cache and cached bytecode to ensure the model always has
-        # one compiled bytecode. Having one FX graph/cached bytecode per
-        # compiled model is required for `support_torch_compile` decorator to
-        # skip dynamo guard.
+        # Clear Dynamo cache to ensure consistent compilation state
         self.model_runner.reset_dynamo_cache()
 
-        # Get the maximum amount of memory used by the model weights and
-        # intermediate activations.
-        if self.use_spmd:
-            # This is a workaround for the TPU SPMD mode. The get_memory_info
-            # API doesn't work with SPMD mode in PyTorch/XLA.
-            # TODO: use xm.get_memory_info for SPMD once it's supported in
-            # PyTorch/XLA.
-            import tpu_info
-            chip_type, _ = tpu_info.device.get_local_chips()
-            device_usage = tpu_info.metrics.get_chip_usage(chip_type)
-            total_memory_size = device_usage[0].total_memory
-            current_mem = device_usage[0].memory_usage
-        else:
-            m = xm.get_memory_info(self.device)
-            total_memory_size = m["bytes_limit"]
-            current_mem = m["bytes_used"]
-        # Ideally we would use profiled = m["peak_bytes_used"] to
-        # get weights + activations. But there is memory used during
-        # compilation / weight loading that impacts the peak and
-        # there is no way to reset peak memory in XLA, So we
-        # use the heuristic of 2% of weights.
-        profiled = current_mem * 1.02
-
-        # Calculate the TPU KV cache size based on profiling.
-        usable_memory_size = int(total_memory_size *
-                                 self.cache_config.gpu_memory_utilization)
-        tpu_kv_cache_bytes = max(usable_memory_size - profiled, 0)
+        # Get GPU memory usage information
+        try:
+            # For XLA GPU, we can use torch.cuda to get memory information
+            if torch.cuda.is_available():
+                # Use CUDA memory info as reference
+                total_memory = torch.cuda.get_device_properties(self.local_rank).total_memory
+                current_memory = torch.cuda.memory_allocated(self.local_rank)
+            else:
+                # Fallback to XLA memory info
+                m = xm.get_memory_info(self.device)
+                total_memory = m.get("bytes_limit", 8 * 1024**3)  # Default 8GB
+                current_memory = m.get("bytes_used", 0)
+                
+        except Exception as e:
+            logger.warning(f"Failed to get memory info: {e}, using defaults")
+            # Use conservative defaults
+            total_memory = 8 * 1024**3  # 8GB
+            current_memory = 2 * 1024**3  # 2GB
+        
+        # Calculate memory used by model weights and activations
+        # Use more precise heuristics
+        model_memory = current_memory * 1.05  # 5% buffer for XLA GPU
+        
+        # Calculate memory available for KV cache
+        usable_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
+        kv_cache_memory = max(usable_memory - model_memory, 0)
+        
+        # Handle head size alignment
         head_size = self.model_config.get_head_size()
         if head_size > 0:
-            padded_head_size = cdiv(
-                head_size, TPU_HEAD_SIZE_ALIGNMENT) * TPU_HEAD_SIZE_ALIGNMENT
+            padded_head_size = cdiv(head_size, XLA_GPU_HEAD_SIZE_ALIGNMENT) * XLA_GPU_HEAD_SIZE_ALIGNMENT
             if padded_head_size != head_size:
-                logger.warning_once("head size is padded to %d",
-                                    padded_head_size)
-            # We adjust the usable memory size for the KV cache to prevent OOM
-            # errors, even after padding the head_size.
-            tpu_kv_cache_bytes = (tpu_kv_cache_bytes * head_size //
-                                  padded_head_size)
-        return int(tpu_kv_cache_bytes)
+                logger.warning_once(f"XLA GPU: head size padded from {head_size} to {padded_head_size}")
+            # Adjust available memory to accommodate padding
+            kv_cache_memory = (kv_cache_memory * head_size // padded_head_size)
+        
+        logger.info(f"XLA GPU memory: Total={total_memory//1024**2}MB, "
+                   f"Model={model_memory//1024**2}MB, "
+                   f"KV Cache={kv_cache_memory//1024**2}MB")
+        
+        return int(kv_cache_memory)
 
     def execute_model(
         self,
         scheduler_output: "SchedulerOutput",
     ) -> Optional[ModelRunnerOutput]:
+        """Execute model inference."""
         output = self.model_runner.execute_model(scheduler_output)
         return output if self.is_driver_worker else None
 
     def profile(self, is_start: bool = True):
-        if self.rank < 1:
+        """Start or stop XLA GPU profiling."""
+        if self.rank < 1:  # Only profile on main rank
             if self.profile_dir is None:
                 raise RuntimeError("Profiler is not enabled.")
             if is_start:
                 if self.profiler is None:
-                    self.profiler = xp.start_server(9012)
+                    # XLA GPU uses different port to avoid conflicts
+                    self.profiler = xp.start_server(9013)  # Different from TPU's 9012
                 xp.start_trace(self.profile_dir)
+                logger.info("XLA GPU profiling started")
             else:
                 xp.stop_trace()
+                logger.info("XLA GPU profiling stopped")
 
     def add_lora(self, lora_request: LoRARequest) -> bool:
+        """Add LoRA adapter."""
         return self.model_runner.add_lora(lora_request)
 
     def load_model(self) -> None:
+        """Load model to XLA GPU."""
         self.model_runner.load_model()
 
     def compile_or_warm_up_model(self) -> None:
+        """Compile or warm up the model."""
         if not self.model_config.enforce_eager:
             self.model_runner.capture_model()
 
-        # Reset the seed to ensure that the random state is not affected by
-        # the model initialization and profiling.
+        # Reset random seed to ensure consistency
         set_random_seed(self.model_config.seed)
 
     def get_model(self) -> nn.Module:
+        """Get model instance."""
         return self.model_runner.get_model()
 
     def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
+        """Get KV cache specification."""
         return self.model_runner.get_kv_cache_spec()
 
     def initialize_from_config(self, kv_cache_config: KVCacheConfig) -> None:
-        """Allocate GPU KV cache with the specified kv_cache_config."""
+        """Initialize KV cache with specified configuration."""
         self.model_runner.initialize_kv_cache(kv_cache_config)
 
     def check_health(self) -> None:
-        # worker will always be healthy as long as it's running.
-        return
+        """Check worker health status."""
+        # XLA GPU worker is always healthy while running
+        try:
+            # Simple device check
+            test_tensor = torch.tensor([1.0], device=self.device)
+            xm.wait_device_ops()
+            logger.debug(f"XLA GPU Worker {self.rank} health check passed")
+        except Exception as e:
+            logger.error(f"XLA GPU Worker {self.rank} health check failed: {e}")
+            raise
 
-    def _init_tpu_worker_distributed_environment(
+    def _init_xla_gpu_worker_distributed_environment(
         self,
         parallel_config: ParallelConfig,
         rank: int,
         distributed_init_method: Optional[str] = None,
         local_rank: int = -1,
     ) -> None:
-        """Initialize the distributed environment."""
+        """Initialize XLA GPU distributed environment."""
+        
         if self.use_spmd:
+            logger.info("Initializing XLA GPU with SPMD mode")
             xr.use_spmd()
-        # NOTE(woosuk): This is just to initialize the TP group and broadcast
-        # the input objects on CPU. The all-reduce and all-gather ops on TPU
-        # are invoked by `xm.all_reduce` and `xm.all_gather` which use their
-        # own context.
+        else:
+            logger.info("Initializing XLA GPU with standard distributed mode")
+        
+        # Initialize distributed environment
+        # XLA GPU uses NCCL as backend for collective communications
         init_distributed_environment(
             world_size=parallel_config.world_size,
             rank=rank,
             local_rank=local_rank,
             distributed_init_method=distributed_init_method,
-            backend=current_platform.dist_backend,
+            backend=current_platform.dist_backend,  # Usually "nccl" for GPU
         )
+        
+        # Ensure model parallel is initialized
         ensure_model_parallel_initialized(
             parallel_config.tensor_parallel_size,
-            parallel_config.pipeline_parallel_size)
+            parallel_config.pipeline_parallel_size
+        )
+        
+        logger.info(f"XLA GPU distributed environment initialized: "
+                   f"world_size={parallel_config.world_size}, "
+                   f"rank={rank}, local_rank={local_rank}, "
+                   f"tp_size={parallel_config.tensor_parallel_size}, "
+                   f"pp_size={parallel_config.pipeline_parallel_size}")
 
-
-try:
-    from tpu_commons.worker import TPUWorker as TPUCommonsWorker
-    TPUWorker = TPUCommonsWorker  # type: ignore
-except ImportError:
-    logger.info("tpu_commons not found, using vLLM's TPUWorker.")
-    pass
+    def __del__(self):
+        """Clean up resources."""
+        try:
+            if hasattr(self, 'profiler') and self.profiler is not None:
+                # Ensure profiler is properly closed
+                try:
+                    xp.stop_trace()
+                except:
+                    pass
+        except:
+            pass

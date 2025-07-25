@@ -1,0 +1,1 @@
+VLLM_USE_V1=1 VLLM_LOGGING_LEVEL=DEBUG vllm serve Qwen/Qwen2.5-3B-Instruct

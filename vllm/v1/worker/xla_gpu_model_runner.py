@@ -9,7 +9,7 @@ from unittest.mock import patch
 import numpy as np
 import torch
 import torch.nn as nn
-# TPU XLA related
+# XLA GPU related
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.spmd as xs
 import torch_xla.runtime as xr
@@ -31,8 +31,8 @@ from vllm.multimodal.utils import group_mm_inputs_by_modality
 from vllm.sequence import IntermediateTensors
 from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, LayerBlockType, cdiv,
                         is_pin_memory_available)
-from vllm.v1.attention.backends.pallas import (PallasAttentionBackend,
-                                               PallasMetadata)
+from vllm.v1.attention.backends.xla_gpu_native import (XlaGpuAttentionBackend,
+                                                XlaGpuMetadata)
 from vllm.v1.core.encoder_cache_manager import compute_encoder_budget
 from vllm.v1.kv_cache_interface import (AttentionSpec, FullAttentionSpec,
                                         KVCacheConfig, KVCacheSpec,
@@ -59,43 +59,46 @@ MIN_NUM_SEQS = 8
 # Block size used for kv cache updating kernel
 NUM_SLICES_PER_KV_CACHE_UPDATE_BLOCK = 8
 
+# XLA GPU specific constants
+XLA_GPU_HEAD_SIZE_ALIGNMENT = 8  # GPU typically aligns to 8 bytes
+
 
 #########################################################
-# Ways to avoid recompilation
+# Ways to avoid recompilation for XLA GPU
 #########################################################
 #
 # The model executor has two primary components:
 # 1. preparing the model and sampler inputs
 # 2. executing the model and sampler.
-# The core idea is to avoid any TPU computation during input preparation. For
+# The core idea is to avoid any XLA GPU computation during input preparation. For
 # better compilation tracking and increased flexibility, the model execution and
 # sampler are divided into several distinct components.
 #
 # Below are the detailed steps:
 #
 # Step 1
-# It is recommended to avoid TPU operations when preparing the model and sampler
+# It is recommended to avoid XLA GPU operations when preparing the model and sampler
 # inputs. CPU tensors can be prepared and transferred to the XLA device using
-# cpu_tensor.to(xla_device), which only triggers CPU to TPU transfers and avoids
+# cpu_tensor.to(xla_device), which only triggers CPU to GPU transfers and avoids
 # compilation.
 #
 # Step 2
-# The TPU execution should be decomposed into subgraphs (4 at the moment):
+# The XLA GPU execution should be decomposed into subgraphs (4 at the moment):
 # 1. the main model
 # 2. selecting hidden states for each request
 # 3. sampler
 # 4. encoder.
 # Each subgraph should be decorated in a torch.compile. This is used to make
 # sure that we have the same subgraph topology in both dummy_run and
-# xecute_model. The results from these subgraphs should either be passed to
-# other subgraphs, or transferred from TPU to CPU using xla_tensor.cpu() for
+# execute_model. The results from these subgraphs should either be passed to
+# other subgraphs, or transferred from XLA GPU to CPU using xla_tensor.cpu() for
 # subsequent processing on the CPU.
 #
 # Step 3
 # The dummy_run should be comprehensive, ensuring all potential input shapes and
 # branch predictions are included as subgraph inputs to facilitate
 # pre-compilation.
-class TPUModelRunner(LoRAModelRunnerMixin):
+class XlaGpuModelRunner(LoRAModelRunnerMixin):
 
     def __init__(
         self,
@@ -123,13 +126,14 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         self.device = device
         self.check_recompilation = envs.VLLM_XLA_CHECK_RECOMPILATION
 
-        # SPMD Related
+        # SPMD Related - XLA GPU supports SPMD differently than TPU
         self.use_spmd = envs.VLLM_XLA_USE_SPMD
         if self.use_spmd:
             num_devices = xr.global_runtime_device_count()
-            mesh_shape = (num_devices, 1)
+            # For XLA GPU, we typically use 1D mesh for tensor parallelism
+            mesh_shape = (num_devices,) if num_devices > 1 else (1,)
             device_ids = np.array(range(num_devices))
-            self.mesh = xs.Mesh(device_ids, mesh_shape, ('x', 'y'))
+            self.mesh = xs.Mesh(device_ids, mesh_shape, ('x',))
 
         self.enforce_eager = model_config.enforce_eager
 
@@ -149,7 +153,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         self.sliding_window = model_config.get_sliding_window()
         self.block_size = cache_config.block_size
         self.max_model_len = model_config.max_model_len
-        self.most_model_len = envs.VLLM_TPU_MOST_MODEL_LEN
+        self.most_model_len = envs.VLLM_XLA_GPU_MOST_MODEL_LEN  # Changed from TPU env
         self.max_num_blocks_per_req = cdiv(self.max_model_len, self.block_size)
         self.num_blocks_per_most_len_req = cdiv(
             self.most_model_len,
@@ -160,7 +164,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         self.num_tokens_paddings = _get_token_paddings(
             min_token_size=16,
             max_token_size=scheduler_config.max_num_batched_tokens,
-            padding_gap=envs.VLLM_TPU_BUCKET_PADDING_GAP)
+            padding_gap=envs.VLLM_XLA_GPU_BUCKET_PADDING_GAP)  # Changed from TPU env
         # In case `max_num_tokens < max(num_tokens_paddings)` use the actual
         # padded max value to pre-allocate data structures and pre-compile.
         self.max_num_tokens = self.num_tokens_paddings[-1]
@@ -182,7 +186,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         self.mm_registry = MULTIMODAL_REGISTRY
         self.uses_mrope = model_config.uses_mrope
         # TODO: Support M-RoPE (e.g, Qwen2-VL)
-        assert not self.uses_mrope, "TPU does not support M-RoPE yet."
+        assert not self.uses_mrope, "XLA GPU does not support M-RoPE yet."
 
         encoder_compute_budget, encoder_cache_size = compute_encoder_budget(
             model_config=model_config,
@@ -227,15 +231,17 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             (self.max_num_reqs, self.max_num_blocks_per_req),
             dtype=torch.int32,
             device="cpu")
-        # adjust num_reqs to avoid SMEM OOM.
+        
+        # Adjust num_reqs to avoid GPU memory limitations
         self.num_reqs_most_model_len = min(
-            PallasAttentionBackend.get_max_num_seqs(self.most_model_len,
+            XlaGpuAttentionBackend.get_max_num_seqs(self.most_model_len,
                                                     self.block_size),
             self.max_num_reqs) if self.most_model_len is not None else None
         self.num_reqs_max_model_len = min(
-            PallasAttentionBackend.get_max_num_seqs(self.max_model_len,
+            XlaGpuAttentionBackend.get_max_num_seqs(self.max_model_len,
                                                     self.block_size),
             self.max_num_reqs)
+        
         self.query_start_loc_cpu = torch.zeros(self.max_num_tokens + 1,
                                                dtype=torch.int32,
                                                device="cpu",
@@ -306,6 +312,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
                                        max_num_mm_items_decoder_budget)
                 self.max_num_mm_items_by_modality[modality] = max_num_mm_items
 
+        # XLA GPU uses different compilation strategy than TPU
         if not self.use_spmd:
             self.sample_from_logits_func = torch.compile(
                 self.sample_from_logits,
@@ -313,6 +320,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
                 fullgraph=True,
                 dynamic=False)
         else:
+            # Under SPMD mode, use different compilation approach
             self.sample_from_logits_func = self.sample_from_logits
 
     def _update_num_xla_graphs(self, case_str):
@@ -397,7 +405,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         # Add new requests to the cached states.
         for new_req_data in scheduler_output.scheduled_new_reqs:
             assert new_req_data.sampling_params is not None,\
-                "Pooling is not supported in TPU yet"
+                "Pooling is not supported in XLA GPU yet"
             req_id = new_req_data.req_id
             sampling_params = new_req_data.sampling_params
 
@@ -677,7 +685,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             self.input_batch.num_computed_tokens_cpu[:num_reqs] +
             num_scheduled_tokens_per_req)
 
-        # Do the padding and copy the tensors to the TPU.
+        # Do the padding and copy the tensors to the XLA GPU.
         padded_total_num_scheduled_tokens = _get_padded_token_len(
             self.num_tokens_paddings, total_num_scheduled_tokens)
         # Zero out to avoid spurious values from prev iteration (last cp chunk)
@@ -739,7 +747,8 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             self.set_active_loras(self.input_batch,
                                   padded_num_scheduled_tokens_per_req)
 
-        attn_metadata = PallasMetadata(
+        # Use XLA GPU attention metadata instead of Pallas
+        attn_metadata = XlaGpuMetadata(
             slot_mapping=slot_mapping_metadata,
             block_tables=block_tables,
             context_lens=seq_lens,
@@ -753,6 +762,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             num_slices_per_kv_cache_update_block=
             NUM_SLICES_PER_KV_CACHE_UPDATE_BLOCK,
         )
+        
         # NOTE(woosuk): Due to chunked prefills, there can be at most 1 partial
         # request in the batch. While we should not sample any token from this
         # partial request, we do so for simplicity. We will ignore the sampled
@@ -936,7 +946,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             # For text-only models, we use token ids as input.
             # While it is possible to use embeddings as input just like the
             # multimodal models, it is not desirable for performance since
-            # then the embedding layer is not included in the CUDA graph.
+            # then the embedding layer is not included in the XLA graph.
             return input_ids, None
 
     @torch.no_grad()
@@ -982,7 +992,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             hidden_states = self.select_hidden_states(hidden_states,
                                                       logits_indices)
             logits = self.compute_logits(hidden_states)
-            tpu_sampling_metadata = TPUSupportedSamplingMetadata.\
+            xla_gpu_sampling_metadata = TPUSupportedSamplingMetadata.\
                 from_input_batch(self.input_batch, padded_num_reqs, self.device)
             if scheduler_output.grammar_bitmask is not None:
                 require_struct_decoding, grammar_bitmask_padded, arange = \
@@ -992,25 +1002,25 @@ class TPUModelRunner(LoRAModelRunnerMixin):
                                                 grammar_bitmask_padded, logits,
                                                 arange)
             selected_token_ids = self.sample_from_logits_func(
-                logits, tpu_sampling_metadata)
+                logits, xla_gpu_sampling_metadata)
             # NOTE (NickLucche) Use the original logits (before any penalties or
             # temperature scaling) for the top-k logprobs. We can't enforce it
             # due to recompilations outside torch.compiled code, so just make
             # sure `sample_from_logits` does not modify the logits in-place.
             logprobs = self.gather_logprobs(logits, selected_token_ids) \
-                if tpu_sampling_metadata.logprobs else None
+                if xla_gpu_sampling_metadata.logprobs else None
 
             # Remove padding on cpu and keep dynamic op outside of xla graph.
             selected_token_ids = selected_token_ids.cpu()[:num_reqs]
 
             combined_selected_tokens.append(selected_token_ids)
-            if tpu_sampling_metadata.logprobs:
+            if xla_gpu_sampling_metadata.logprobs:
                 combined_logprobs.append(logprobs.tolists())
 
             start_index = end_index
 
         selected_token_ids = torch.cat(combined_selected_tokens, dim=0)
-        if tpu_sampling_metadata.logprobs:
+        if xla_gpu_sampling_metadata.logprobs:
 
             def concat_lists(input_lists):
                 result = []
@@ -1117,7 +1127,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         # NOTE(woosuk): While the executor assigns the TP ranks to the worker
         # process, the ranks can be different from the ranks internally assigned
         # by the xm runtime. Therefore, there is a mismatch in the rank
-        # assignment between the gloo (cpu) runtime and the xm (tpu) runtime.
+        # assignment between the gloo (cpu) runtime and the xm (xla gpu) runtime.
         # This is not a problem in linear layers because all-reduce is
         # rank-agnostic. However, it matters for all-gather as the ranks
         # determine the order of concatenating the output tensors.
@@ -1201,7 +1211,9 @@ class TPUModelRunner(LoRAModelRunnerMixin):
                                   dtype=torch.int32).to(self.device)
         num_seqs = torch.tensor([actual_num_reqs],
                                 dtype=torch.int32).to(self.device)
-        attn_metadata = PallasMetadata(
+        
+        # Use XLA GPU attention metadata
+        attn_metadata = XlaGpuMetadata(
             slot_mapping=slot_mapping,
             block_tables=block_tables,
             context_lens=context_lens,
@@ -1275,7 +1287,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
                     if num_tokens >= items_size:
                         # XLA Workaround: if torch.zeros(..device) is used, XLA
                         # compiles a scalar+expansion op, which won't match
-                        # the graph generated at runtime. CPU->TPU must be used
+                        # the graph generated at runtime. CPU->GPU must be used
                         placeholders_ids = torch.zeros(num_tokens,
                                                        dtype=torch.int32,
                                                        device="cpu")
@@ -1549,7 +1561,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
         for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
             assert len(kv_cache_tensor.shared_by) == 1, (
                 "KV cache tensor shared by multiple layers is not supported in "
-                "TPU.")
+                "XLA GPU.")
             kv_cache_sizes[kv_cache_tensor.shared_by[0]] = kv_cache_tensor.size
 
         kv_caches: dict[str, torch.Tensor] = {}
@@ -1569,15 +1581,17 @@ class TPUModelRunner(LoRAModelRunnerMixin):
                         assert num_kv_heads % tp_size == 0, (
                             f"num_kv_heads {num_kv_heads} must be divisible by "
                             f"tp_size {tp_size} under SPMD mode")
-                    kv_cache_shape = PallasAttentionBackend.get_kv_cache_shape(
+                    
+                    # Use XLA GPU attention backend instead of Pallas
+                    kv_cache_shape = XlaGpuAttentionBackend.get_kv_cache_shape(
                         num_blocks, kv_cache_spec.block_size,
                         kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
                     dtype = kv_cache_spec.dtype
 
-                    tpu_kv_cache = torch.zeros(kv_cache_shape,
-                                               dtype=dtype).to(self.device)
+                    xla_gpu_kv_cache = torch.zeros(kv_cache_shape,
+                                                   dtype=dtype).to(self.device)
 
-                    kv_caches[layer_name] = tpu_kv_cache
+                    kv_caches[layer_name] = xla_gpu_kv_cache
                 else:
                     raise NotImplementedError
 
@@ -1596,8 +1610,9 @@ class TPUModelRunner(LoRAModelRunnerMixin):
             self.kv_caches)
 
         if self.use_spmd:
-            # Shard KV Cache
+            # Shard KV Cache for XLA GPU
             for cache in self.kv_caches:
+                # For XLA GPU, we typically shard along the head dimension
                 xs.mark_sharding(cache, self.mesh, (None, 'x', None, None))
 
     def reset_dynamo_cache(self):
@@ -1692,7 +1707,7 @@ class TPUModelRunner(LoRAModelRunnerMixin):
 
         # We receive the structured output bitmask from the scheduler, but the
         # indices of the requests in the batch may not match the indices of
-        # the bitmask since the scheduler doesn't know how the tpu runner is
+        # the bitmask since the scheduler doesn't know how the xla gpu runner is
         # ordering the requests in the batch. We need to match the order of
         # bitmask with the order of requests
         struct_out_indices: list[int] = []
@@ -1829,7 +1844,7 @@ def _get_padded_num_kv_cache_update_slices(num_tokens: int, max_num_reqs: int,
 
 def replace_set_lora(model):
 
-    def _tpu_set_lora(
+    def _xla_gpu_set_lora(
         self,
         index: int,
         lora_a: torch.Tensor,
@@ -1843,7 +1858,7 @@ def replace_set_lora(model):
         self._original_set_lora(index, lora_a, lora_b, embeddings_tensor, bias)
         xm.mark_step()
 
-    def _tpu_reset_lora(self, index: int):
+    def _xla_gpu_reset_lora(self, index: int):
         self._original_reset_lora(index)
         xm.mark_step()
 
@@ -1851,6 +1866,6 @@ def replace_set_lora(model):
         if isinstance(module, BaseLayerWithLoRA):
             module._original_set_lora = module.set_lora
             module._original_reset_lora = module.reset_lora
-            module.set_lora = _tpu_set_lora.__get__(module, module.__class__)
-            module.reset_lora = _tpu_reset_lora.__get__(
+            module.set_lora = _xla_gpu_set_lora.__get__(module, module.__class__)
+            module.reset_lora = _xla_gpu_reset_lora.__get__(
                 module, module.__class__)

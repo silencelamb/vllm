@@ -4,7 +4,6 @@
 from typing import TYPE_CHECKING, Optional, Union, cast
 
 import torch
-from tpu_info import device
 
 from vllm.inputs import ProcessorInputs, PromptType
 from vllm.logger import init_logger
@@ -24,21 +23,22 @@ else:
 
 logger = init_logger(__name__)
 
+from .cuda import with_nvml_context, pynvml
 
-class TpuPlatform(Platform):
-    _enum = PlatformEnum.TPU
-    device_name: str = "tpu"
-    device_type: str = "tpu"
-    dispatch_key: str = "XLA"
-    ray_device_key: str = "TPU"
-    dist_backend: str = "gloo"
-    device_control_env_var: str = "TPU_VISIBLE_CHIPS"
+class XlaGpuPlatform(Platform):
+    _enum = PlatformEnum.XLA_GPU
+    device_name: str = "xla_gpu"
+    device_type: str = "xla_gpu"
+    dispatch_key: str = "XLA_GPU"
+    ray_device_key: str = "XLA_GPU"
+    dist_backend: str = "NCCL"
+    device_control_env_var: str = "CUDA_VISIBLE_DEVICES"
     simple_compile_backend: str = "openxla"
 
-    supported_quantization: list[str] = ["tpu_int8", "compressed-tensors"]
+    supported_quantization: list[str] = [""]
 
     additional_env_vars: list[str] = [
-        "TPU_CHIPS_PER_HOST_BOUNDS", "TPU_HOST_BOUNDS"
+        "PJRT_DEVICE", "GPU_NUM_DEVICES", "XLA_DYNAMO_DEBUG"
     ]
 
     @classmethod
@@ -48,28 +48,30 @@ class TpuPlatform(Platform):
                              use_mla: bool) -> str:
         if (selected_backend != _Backend.PALLAS
                 and selected_backend != _Backend.PALLAS_VLLM_V1):
-            logger.info("Cannot use %s backend on TPU.", selected_backend)
+            logger.info("Cannot use %s backend on XLA GPU.", selected_backend)
 
         if not use_v1:
-            raise ValueError("TPU backend only supports V1.")
+            raise ValueError("XLA GPU backend only supports V1.")
         logger.info("Using Pallas V1 backend.")
         return "vllm.v1.attention.backends.pallas.PallasAttentionBackend"
 
     @classmethod
-    def set_device(cls, device: torch.device) -> None:
-        """
-        Set the device for the current platform.
-        """
-        torch.tpu.set_device(device)
-
-    @classmethod
     def get_device_name(cls, device_id: int = 0) -> str:
-        chip_type, _ = device.get_local_chips()
-        return f"TPU {chip_type.name}"
+        try:
+            import torch_xla
+            import torch_xla.core.xla_model as xm
+            
+            device = xm.xla_device(device_id)
+            return f"XLA_GPU:{device_id}"
+        except Exception:
+            return f"XLA_GPU_UNKNOWN"
 
     @classmethod
+    @with_nvml_context
     def get_device_total_memory(cls, device_id: int = 0) -> int:
-        raise NotImplementedError
+        physical_device_id = cls.device_id_to_physical_device_id(device_id)
+        handle = pynvml.nvmlDeviceGetHandleByIndex(physical_device_id)
+        return int(pynvml.nvmlDeviceGetMemoryInfo(handle).total)
 
     @classmethod
     def is_async_output_supported(cls, enforce_eager: Optional[bool]) -> bool:
@@ -77,7 +79,7 @@ class TpuPlatform(Platform):
 
     @classmethod
     def get_punica_wrapper(cls) -> str:
-        return "vllm.lora.punica_wrapper.punica_tpu.PunicaWrapperTPU"
+        raise NotImplementedError("Punica wrapper is not implemented.")
 
     @classmethod
     def get_infinity_values(cls, dtype: torch.dtype) -> tuple[float, float]:
@@ -105,22 +107,22 @@ class TpuPlatform(Platform):
             cache_config.block_size = cast(BlockSize, 16)
         compilation_config = vllm_config.compilation_config
 
-        # TPU only supports DYNAMO_ONCE compilation level
+        # XLA GPU only supports DYNAMO_ONCE compilation level
         if compilation_config.level != CompilationLevel.DYNAMO_ONCE:
-            logger.info("[TPU] Forcing DYNAMO_ONCE compilation level")
+            logger.info("[XLA GPU] Forcing DYNAMO_ONCE compilation level")
             compilation_config.level = CompilationLevel.DYNAMO_ONCE
 
         if compilation_config.backend == "":
             compilation_config.backend = "openxla"
 
         assert vllm_config.speculative_config is None, \
-            "TPU does not support speculative decoding"
+            "XLA GPU does not support speculative decoding"
 
         model_config = vllm_config.model_config
         if model_config is not None and model_config.dtype in (torch.float16,
                                                                torch.float32):
             logger.warning(
-                "The TPU backend currently does not support %s. "
+                "The XLA GPU backend currently does not support %s. "
                 "Using bfloat16 instead.", model_config.dtype)
             model_config.dtype = torch.bfloat16
 
@@ -136,14 +138,14 @@ class TpuPlatform(Platform):
                     "Multi-step scheduling is not supported (and not "
                     "needed) on vLLM V1. Please launch without "
                     "--num-scheduler-steps.")
-            parallel_config.worker_cls = "vllm.v1.worker.tpu_worker.TPUWorker"
+            parallel_config.worker_cls = "vllm.v1.worker.xla_gpu_worker.XlaGpuWorker"
 
         assert not vllm_config.speculative_config, (
-            "Speculative decoding is not yet supported for TPU backend")
+            "Speculative decoding is not yet supported for XLA GPU backend")
 
         if scheduler_config.is_multimodal_model and not \
             scheduler_config.disable_chunked_mm_input:
-            logger.warning("TPU does not support running Multimodal models"\
+            logger.warning("XLA GPU does not support running Multimodal models"\
             " without setting `--disable_chunked_mm_input`. " \
             "Forcing --disable_chunked_mm_input.")
             scheduler_config.disable_chunked_mm_input = True
@@ -160,7 +162,7 @@ class TpuPlatform(Platform):
 
     @classmethod
     def is_pin_memory_available(cls):
-        logger.warning("Pin memory is not supported on TPU.")
+        logger.warning("Pin memory is not supported on XLA GPU.")
         return False
 
     @classmethod
@@ -173,7 +175,7 @@ class TpuPlatform(Platform):
 
     @classmethod
     def supports_v1(cls, model_config: ModelConfig) -> bool:
-        # V1 support on TPU is experimental
+        # V1 support on XLA GPU is experimental
         return True
 
     @classmethod
@@ -187,11 +189,3 @@ class TpuPlatform(Platform):
         if (isinstance(params, SamplingParams)
                 and params.sampling_type == SamplingType.RANDOM_SEED):
             raise ValueError("Torch XLA does not support per-request seed.")
-
-
-try:
-    from tpu_commons.platforms import TpuPlatform as TpuCommonsPlatform
-    TpuPlatform = TpuCommonsPlatform  # type: ignore
-except ImportError:
-    logger.info("tpu_commons not found, using vLLM's TpuPlatform")
-    pass
