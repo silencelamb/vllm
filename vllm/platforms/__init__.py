@@ -204,7 +204,33 @@ def neuron_platform_plugin() -> Optional[str]:
     return "vllm.platforms.neuron.NeuronPlatform" if is_neuron else None
 
 
+def xla_gpu_platform_plugin() -> Optional[str]:
+    # Check if the environment variable for using XLA GPU is set
+
+    # if os.environ.get("VLLM_USE_XLA_GPU", "0").lower() in ("1", "true", "yes"):
+    try:
+        import torch_xla.core.xla_model as xm
+
+        # 获取设备信息
+        device = xm.xla_device()
+
+        # 检查设备类型
+        device_type = xm.xla_device_hw(device)
+        print(f"found xla and 设备类型: {device_type}")
+
+        # 判断是否为 GPU
+        if device_type == 'GPU':
+            return "vllm.platforms.xla_gpu.XlaGpuPlatform"
+        else:
+            return None
+
+    except ImportError:
+        logger.error("VLLM_USE_XLA_GPU is set but XLA GPU is not available!")
+        return None
+
+
 builtin_platform_plugins = {
+    'xla_gpu': xla_gpu_platform_plugin,
     'tpu': tpu_platform_plugin,
     'cuda': cuda_platform_plugin,
     'rocm': rocm_platform_plugin,
