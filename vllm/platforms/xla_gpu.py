@@ -46,14 +46,9 @@ class XlaGpuPlatform(Platform):
                              dtype: torch.dtype, kv_cache_dtype: Optional[str],
                              block_size: int, use_v1: bool,
                              use_mla: bool) -> str:
-        if (selected_backend != _Backend.PALLAS
-                and selected_backend != _Backend.PALLAS_VLLM_V1):
-            logger.info("Cannot use %s backend on XLA GPU.", selected_backend)
-
-        if not use_v1:
-            raise ValueError("XLA GPU backend only supports V1.")
-        logger.info("Using Pallas V1 backend.")
-        return "vllm.v1.attention.backends.pallas.PallasAttentionBackend"
+        
+        logger.info("Using XlaGpuPagedAttentionBackend.")
+        return "vllm.v1.attention.backends.xla_gpu_native.XlaGpuPagedAttentionBackend"
 
     @classmethod
     def get_device_name(cls, device_id: int = 0) -> str:

@@ -31,8 +31,8 @@ from vllm.multimodal.utils import group_mm_inputs_by_modality
 from vllm.sequence import IntermediateTensors
 from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, LayerBlockType, cdiv,
                         is_pin_memory_available)
-from vllm.v1.attention.backends.xla_gpu_native import (XlaGpuAttentionBackend,
-                                                XlaGpuMetadata)
+from vllm.v1.attention.backends.xla_gpu_native import (XlaGpuPagedAttentionBackend,
+                                                XlaGpuPagedMetadata)
 from vllm.v1.core.encoder_cache_manager import compute_encoder_budget
 from vllm.v1.kv_cache_interface import (AttentionSpec, FullAttentionSpec,
                                         KVCacheConfig, KVCacheSpec,
@@ -707,7 +707,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                                   padded_num_scheduled_tokens_per_req)
 
         # Use XLA GPU attention metadata instead of Pallas
-        attn_metadata = XlaGpuMetadata(
+        attn_metadata = XlaGpuPagedMetadata(
             slot_mapping=slot_mapping_metadata,
             block_tables=block_tables,
             context_lens=seq_lens,
@@ -1172,7 +1172,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                                 dtype=torch.int32).to(self.device)
         
         # Use XLA GPU attention metadata
-        attn_metadata = XlaGpuMetadata(
+        attn_metadata = XlaGpuPagedMetadata(
             slot_mapping=slot_mapping,
             block_tables=block_tables,
             context_lens=context_lens,
@@ -1535,7 +1535,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                             f"tp_size {tp_size} under SPMD mode")
                     
                     # Use XLA GPU attention backend instead of Pallas
-                    kv_cache_shape = XlaGpuAttentionBackend.get_kv_cache_shape(
+                    kv_cache_shape = XlaGpuPagedAttentionBackend.get_kv_cache_shape(
                         num_blocks, kv_cache_spec.block_size,
                         kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
                     dtype = kv_cache_spec.dtype

@@ -73,6 +73,8 @@ class PlatformEnum(enum.Enum):
     CPU = enum.auto()
     NEURON = enum.auto()
     OOT = enum.auto()
+    XLA_GPU = enum.auto()  # XLA GPU
+    XLA_CPU = enum.auto()  # XLA CPU
     UNSPECIFIED = enum.auto()
 
 
