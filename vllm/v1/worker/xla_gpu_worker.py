@@ -210,16 +210,11 @@ class XlaGpuWorker:
 
         # Get GPU memory usage information
         try:
-            # For XLA GPU, we can use torch.cuda to get memory information
-            if torch.cuda.is_available():
-                # Use CUDA memory info as reference
-                total_memory = torch.cuda.get_device_properties(self.local_rank).total_memory
-                current_memory = torch.cuda.memory_allocated(self.local_rank)
-            else:
-                # Fallback to XLA memory info
-                m = xm.get_memory_info(self.device)
-                total_memory = m.get("bytes_limit", 8 * 1024**3)  # Default 8GB
-                current_memory = m.get("bytes_used", 0)
+            # For XLA GPU, we can use XLA memory info
+            m = xm.get_memory_info(self.device)
+            total_memory = m.get("bytes_limit", 8 * 1024**3)  # Default 8GB
+            current_memory = m.get("bytes_used", 0)
+            logger.info(f"XLA GPU memory info: total={total_memory//1024**2}MB, used={current_memory//1024**2}MB")
                 
         except Exception as e:
             logger.warning(f"Failed to get memory info: {e}, using defaults")

@@ -120,6 +120,7 @@ if TYPE_CHECKING:
     VLLM_V1_USE_OUTLINES_CACHE: bool = False
     VLLM_TPU_BUCKET_PADDING_GAP: int = 0
     VLLM_TPU_MOST_MODEL_LEN: Optional[int] = None
+    VLLM_XLA_GPU_BUCKET_PADDING_GAP: int = 0
     VLLM_USE_DEEP_GEMM: bool = False
     VLLM_XGRAMMAR_CACHE_MB: int = 0
     VLLM_MSGPACK_ZERO_COPY_THRESHOLD: int = 256
@@ -861,6 +862,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     if "VLLM_TPU_BUCKET_PADDING_GAP" in os.environ else 0,
     "VLLM_TPU_MOST_MODEL_LEN":
     lambda: maybe_convert_int(os.environ.get("VLLM_TPU_MOST_MODEL_LEN", None)),
+
+    "VLLM_XLA_GPU_BUCKET_PADDING_GAP":
+    lambda: int(os.environ["VLLM_XLA_GPU_BUCKET_PADDING_GAP"])
+    if "VLLM_XLA_GPU_BUCKET_PADDING_GAP" in os.environ else 0,
 
     # Allow use of DeepGemm kernels for fused moe ops.
     "VLLM_USE_DEEP_GEMM":

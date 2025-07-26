@@ -91,6 +91,10 @@ def cuda_platform_plugin() -> Optional[str]:
             is_cuda = True
         else:
             logger.debug("CUDA platform is not available because: %s", str(e))
+    
+    if os.environ.get("VLLM_USE_XLA_GPU", "0").lower() in ("1", "true", "yes"):
+        logger.debug("VLLM_USE_XLA_GPU is set,  USE XLA GPU platform.")
+        is_cuda = False
 
     return "vllm.platforms.cuda.CudaPlatform" if is_cuda else None
 
@@ -206,27 +210,30 @@ def neuron_platform_plugin() -> Optional[str]:
 
 def xla_gpu_platform_plugin() -> Optional[str]:
     # Check if the environment variable for using XLA GPU is set
+    
+    import os
+    if os.environ.get("VLLM_USE_XLA_GPU", "0").lower() in ("1", "true", "yes"):
+        try:
+            import torch_xla.core.xla_model as xm
 
-    # if os.environ.get("VLLM_USE_XLA_GPU", "0").lower() in ("1", "true", "yes"):
-    try:
-        import torch_xla.core.xla_model as xm
+            # 获取设备信息
+            device = xm.xla_device()
 
-        # 获取设备信息
-        device = xm.xla_device()
+            # 检查设备类型
+            device_type = xm.xla_device_hw(device)
+            print(f"found xla and 设备类型: {device_type}")
 
-        # 检查设备类型
-        device_type = xm.xla_device_hw(device)
-        print(f"found xla and 设备类型: {device_type}")
+            # 判断是否为 GPU
+            if device_type == 'CUDA':
+                return "vllm.platforms.xla_gpu.XlaGpuPlatform"
+            else:
+                logger.error("VLLM_USE_XLA_GPU is set but XLA GPU is not available!")
+                return None
 
-        # 判断是否为 GPU
-        if device_type == 'GPU':
-            return "vllm.platforms.xla_gpu.XlaGpuPlatform"
-        else:
+        except ImportError:
+            logger.error("VLLM_USE_XLA_GPU is set but XLA GPU is not available!")
             return None
-
-    except ImportError:
-        logger.error("VLLM_USE_XLA_GPU is set but XLA GPU is not available!")
-        return None
+    return None
 
 
 builtin_platform_plugins = {
@@ -255,13 +262,12 @@ def resolve_current_platform_cls_qualname() -> str:
                 activated_plugins.append(name)
         except Exception:
             pass
-
     activated_builtin_plugins = list(
         set(activated_plugins) & set(builtin_platform_plugins.keys()))
     activated_oot_plugins = list(
         set(activated_plugins) & set(platform_plugins.keys()))
 
-    if len(activated_oot_plugins) >= 2:
+    if len(activated_oot_plugins) >= 1:
         raise RuntimeError(
             "Only one platform plugin can be activated, but got: "
             f"{activated_oot_plugins}")
@@ -269,11 +275,11 @@ def resolve_current_platform_cls_qualname() -> str:
         platform_cls_qualname = platform_plugins[activated_oot_plugins[0]]()
         logger.info("Platform plugin %s is activated",
                     activated_oot_plugins[0])
-    elif len(activated_builtin_plugins) >= 2:
-        raise RuntimeError(
-            "Only one platform plugin can be activated, but got: "
-            f"{activated_builtin_plugins}")
-    elif len(activated_builtin_plugins) == 1:
+    elif len(activated_builtin_plugins) >= 1:
+    #     raise RuntimeError(
+    #         "Only one platform plugin can be activated, but got: "
+    #         f"{activated_builtin_plugins}")
+    # elif len(activated_builtin_plugins) == 1:
         platform_cls_qualname = builtin_platform_plugins[
             activated_builtin_plugins[0]]()
         logger.info("Automatically detected platform %s.",

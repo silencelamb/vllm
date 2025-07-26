@@ -126,6 +126,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         self.device = device
         self.check_recompilation = envs.VLLM_XLA_CHECK_RECOMPILATION
 
+        torch._dynamo.config.capture_dynamic_output_shape_ops = True
         # SPMD Related - XLA GPU supports SPMD differently than TPU
         self.use_spmd = envs.VLLM_XLA_USE_SPMD
         if self.use_spmd:
@@ -706,20 +707,80 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             self.set_active_loras(self.input_batch,
                                   padded_num_scheduled_tokens_per_req)
 
-        # Use XLA GPU attention metadata instead of Pallas
+        # Calculate additional fields needed before creating attn_metadata
+        # 1. Calculate token_to_seq_mapping
+        # Mark which sequence each token belongs to
+        token_to_seq_mapping = []
+        for req_idx in range(num_reqs):
+            num_tokens_for_req = num_scheduled_tokens_per_req[req_idx]
+            token_to_seq_mapping.extend([req_idx] * num_tokens_for_req)
+
+        token_to_seq_mapping = torch.tensor(token_to_seq_mapping, 
+                                            dtype=torch.int32, 
+                                            device=self.device)
+
+        # 2. Calculate max_context_len
+        max_context_len = seq_lens.max().item() if len(seq_lens) > 0 else 0
+
+        # 3. More precise attention_mask calculation
+        if max_context_len > 0:
+            attention_mask = torch.zeros(
+                (total_num_scheduled_tokens, max_context_len),
+                dtype=torch.float32, device=self.device
+            )
+            
+            token_idx = 0
+            for req_idx in range(num_reqs):
+                req_seq_len = seq_lens[req_idx].item()
+                req_num_tokens = num_scheduled_tokens_per_req[req_idx]
+                req_computed_tokens = self.input_batch.num_computed_tokens_cpu[req_idx]
+                
+                for token_pos in range(req_num_tokens):
+                    current_pos_in_seq = req_computed_tokens + token_pos
+                    
+                    # This token can attend to all positions before it (including itself) in the sequence
+                    attention_mask[token_idx, :current_pos_in_seq + 1] = 0.0
+                    # For positions after it, set to -inf (cannot attend)
+                    attention_mask[token_idx, current_pos_in_seq + 1:] = float('-inf')
+                    
+                    token_idx += 1
+        else:
+            attention_mask = torch.zeros((total_num_scheduled_tokens, 1),
+                                        dtype=torch.float32, device=self.device)
+
+        # 4. Calculate is_prefill_token
+        # Determine which tokens are prefill (first-time processing) vs decode (generation)
+        is_prefill_token = torch.zeros(total_num_scheduled_tokens, 
+                                    dtype=torch.bool, device=self.device)
+
+        token_idx = 0
+        for req_idx in range(num_reqs):
+            req_id = self.input_batch.req_ids[req_idx]
+            req_state = self.requests[req_id]
+            num_computed = req_state.num_computed_tokens
+            num_scheduled = num_scheduled_tokens_per_req[req_idx]
+            
+            # If this request has 0 computed tokens, it's first-time processing (prefill)
+            # Otherwise it's decode
+            is_prefill = (num_computed == 0)
+            
+            for _ in range(num_scheduled):
+                is_prefill_token[token_idx] = is_prefill
+                token_idx += 1
+
+        # Create XlaGpuPagedMetadata with all required fields
         attn_metadata = XlaGpuPagedMetadata(
+            # Original fields
             slot_mapping=slot_mapping_metadata,
             block_tables=block_tables,
             context_lens=seq_lens,
-            query_start_loc=query_start_loc,
-            num_seqs=torch.tensor([num_reqs],
-                                  dtype=torch.int32,
-                                  device=self.device),
-            num_kv_update_slices=torch.tensor([num_kv_update_slices],
-                                              dtype=torch.int32,
-                                              device=self.device),
-            num_slices_per_kv_cache_update_block=
-            NUM_SLICES_PER_KV_CACHE_UPDATE_BLOCK,
+            
+            # New fields
+            token_to_seq_mapping=token_to_seq_mapping,
+            attention_mask=attention_mask,
+            is_prefill_token=is_prefill_token,
+            max_context_len=max_context_len,
+            block_size=self.block_size,
         )
         
         # NOTE(woosuk): Due to chunked prefills, there can be at most 1 partial
@@ -1140,73 +1201,111 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
 
     @torch.no_grad()
     def _dummy_run(self, num_tokens: int, num_reqs: int,
-                   num_blocks: int) -> None:
+                num_blocks: int) -> None:
+        # 使用固定的、较大的尺寸来避免动态形状问题
+        # 但仍然标记为动态以支持真实运行时的变化
+        MAX_TOKENS = max(num_tokens, 32)  # 确保最小尺寸
+        MAX_REQS = max(num_reqs, 4)
+        MAX_BLOCKS = max(num_blocks, 8)
+        MAX_CONTEXT_LEN = 32  # 固定的上下文长度
+        
         if self.is_multimodal_model:
             input_ids = None
-            inputs_embeds = torch.zeros((num_tokens, self.hidden_size),
+            inputs_embeds = torch.zeros((MAX_TOKENS, self.hidden_size),
                                         dtype=self.dtype,
                                         device=self.device)
         else:
-            input_ids = torch.zeros((num_tokens),
+            input_ids = torch.zeros((MAX_TOKENS,),
                                     dtype=torch.int32).to(self.device)
             inputs_embeds = None
-        actual_num_reqs = min(num_tokens, num_reqs)
-        position_ids = torch.zeros(num_tokens,
-                                   dtype=torch.int32).to(self.device)
+        
+        actual_num_reqs = min(MAX_TOKENS, MAX_REQS)
+        position_ids = torch.zeros(MAX_TOKENS,
+                                dtype=torch.int32).to(self.device)
+        
         padded_num_slices = _get_padded_num_kv_cache_update_slices(
-            num_tokens, self.max_num_reqs, self.block_size)
+            MAX_TOKENS, self.max_num_reqs, self.block_size)
         num_kv_update_slices = torch.tensor([padded_num_slices],
                                             dtype=torch.int32).to(self.device)
         slot_mapping = torch.zeros((3, padded_num_slices),
-                                   dtype=torch.int32).to(self.device)
-        block_tables = torch.zeros((num_reqs, num_blocks),
-                                   dtype=torch.int32).to(self.device)
-        query_lens = [1] * num_reqs
+                                dtype=torch.int32).to(self.device)
+        block_tables = torch.zeros((MAX_REQS, MAX_BLOCKS),
+                                dtype=torch.int32).to(self.device)
+        
+        query_lens = [1] * MAX_REQS
         query_start_loc = torch.cumsum(torch.tensor([0] + query_lens,
                                                     dtype=torch.int32),
-                                       dim=0,
-                                       dtype=torch.int32).to(self.device)
-        context_lens = torch.ones((num_reqs, ),
-                                  dtype=torch.int32).to(self.device)
+                                    dim=0,
+                                    dtype=torch.int32).to(self.device)
+        context_lens = torch.ones((MAX_REQS,),
+                                dtype=torch.int32).to(self.device)
         num_seqs = torch.tensor([actual_num_reqs],
                                 dtype=torch.int32).to(self.device)
         
-        # Use XLA GPU attention metadata
+        # 简化token_to_seq_mapping创建
+        token_to_seq_mapping = torch.zeros(MAX_TOKENS,
+                                        dtype=torch.int32,
+                                        device=self.device)
+        # 均匀分布tokens到sequences
+        tokens_per_seq = MAX_TOKENS // actual_num_reqs
+        for seq_idx in range(actual_num_reqs):
+            start_idx = seq_idx * tokens_per_seq
+            end_idx = min((seq_idx + 1) * tokens_per_seq, MAX_TOKENS)
+            if seq_idx == actual_num_reqs - 1:  # 最后一个sequence获得剩余tokens
+                end_idx = MAX_TOKENS
+            token_to_seq_mapping[start_idx:end_idx] = seq_idx
+        
+        # 使用固定尺寸的attention mask
+        attention_mask = torch.zeros(
+            (MAX_TOKENS, MAX_CONTEXT_LEN),
+            dtype=torch.float32, device=self.device
+        )
+        # 创建简单的causal mask
+        attention_mask[:, 0] = 0.0  # 可以attend到第一个位置
+        attention_mask[:, 1:] = float('-inf')  # 不能attend到其他位置
+        
+        is_prefill_token = torch.ones(MAX_TOKENS, dtype=torch.bool, device=self.device)
+        
         attn_metadata = XlaGpuPagedMetadata(
             slot_mapping=slot_mapping,
             block_tables=block_tables,
             context_lens=context_lens,
-            query_start_loc=query_start_loc,
-            num_seqs=num_seqs,
-            num_kv_update_slices=num_kv_update_slices,
-            num_slices_per_kv_cache_update_block=
-            NUM_SLICES_PER_KV_CACHE_UPDATE_BLOCK,
+            token_to_seq_mapping=token_to_seq_mapping,
+            attention_mask=attention_mask,
+            is_prefill_token=is_prefill_token,
+            max_context_len=MAX_CONTEXT_LEN,
+            block_size=self.block_size,
         )
 
+        # 在forward之前配置dynamo
+        torch._dynamo.config.capture_dynamic_output_shape_ops = True
+        
+        # 只在创建metadata后标记动态维度
         if self.is_multimodal_model:
             torch._dynamo.mark_dynamic(inputs_embeds, 0)
         else:
             torch._dynamo.mark_dynamic(input_ids, 0)
         torch._dynamo.mark_dynamic(position_ids, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.block_tables, (0, 1))
+        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 1)
+        torch._dynamo.mark_dynamic(attn_metadata.block_tables, 0)
         torch._dynamo.mark_dynamic(attn_metadata.context_lens, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.token_to_seq_mapping, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.attention_mask, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.is_prefill_token, 0)
 
-        layer_names = get_layers_from_vllm_config(self.vllm_config,
-                                                  Attention).keys()
+        layer_names = get_layers_from_vllm_config(self.vllm_config, Attention).keys()
         per_layer_attn_metadata = {
             layer_name: attn_metadata
             for layer_name in layer_names
         }
-
+        
         with self.maybe_select_dummy_loras(
                 self.lora_config,
-                np.array([num_tokens], dtype=np.int32)), set_forward_context(
+                np.array([MAX_TOKENS], dtype=np.int32)), set_forward_context(
                     per_layer_attn_metadata, self.vllm_config, 0):
             out = self.model(input_ids=input_ids,
-                             positions=position_ids,
-                             inputs_embeds=inputs_embeds)
+                            positions=position_ids,
+                            inputs_embeds=inputs_embeds)
         self._hidden_states_dtype = out.dtype
 
     def _set_active_loras(self, prompt_lora_mapping, token_lora_mapping,

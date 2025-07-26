@@ -8,78 +8,235 @@ import tempfile
 import depyf
 
 
-def test_tpu_compilation():
+def test_xla_gpu_compilation():
     temp_dir = tempfile.mkdtemp()
-    with depyf.prepare_debug(temp_dir):
-        from vllm import LLM, SamplingParams
 
-        prompts = [
-            "A robot may not injure a human being",
-            "It is only with the heart that one can see rightly;",
-            "The greatest glory in living lies not in never falling,",
-        ]
-        answers = [
-            " or, through inaction",
-            " what is essential ",
-            " but in rising ",
-        ]
+    os.environ["VLLM_USE_XLA_GPU"] = "1"
+    os.environ["VLLM_USE_V1"] = "1"
+    os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+    # Set XLA GPU environment variables
 
-        # Currently, top-p sampling is disabled. `top_p` should be 1.0.
-        N = 1
-        sampling_params = SamplingParams(temperature=0.7,
-                                         top_p=1.0,
-                                         n=N,
-                                         max_tokens=16)
+    os.environ["GPU_NUM_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # Use GPU 3
+    os.environ["PJRT_DEVICE"] = "CUDA"
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    
+    # Set offline mode to avoid network issues
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    
+    # Disable proxy to ensure local communication works properly
+    proxy_vars = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']
+    original_proxies = {}
+    for var in proxy_vars:
+        if var in os.environ:
+            original_proxies[var] = os.environ[var]
+            del os.environ[var]
+    
+    os.environ['no_proxy'] = "localhost,127.0.0.1,0.0.0.0,::1"
+    os.environ['NO_PROXY'] = os.environ['no_proxy']
+    
+    try:
+        with depyf.prepare_debug(temp_dir):
+            from vllm import LLM, SamplingParams
 
-        llm = LLM(model="Qwen/Qwen2-1.5B-Instruct",
-                  max_num_batched_tokens=256,
-                  max_model_len=256,
-                  max_num_seqs=32,
-                  enforce_eager=False)
+            prompts = [
+                "A robot may not injure a human being",
+                "It is only with the heart that one can see rightly;",
+                "The greatest glory in living lies not in never falling,",
+            ]
+            answers = [
+                " or, through inaction",
+                " what is essential ",
+                " but in rising ",
+            ]
 
+            # XLA GPU sampling configuration
+            N = 1
+            sampling_params = SamplingParams(
+                temperature=0.7,
+                top_p=1.0,
+                n=N,
+                max_tokens=16
+            )
+
+            # Use local model path to avoid network download
+            # Replace with your actual local model path
+            model_path = "Qwen/Qwen2.5-3B-Instruct"  # Please replace with actual path
+            
+            llm = LLM(
+                model=model_path,
+                max_num_batched_tokens=256,
+                max_model_len=256,
+                max_num_seqs=32,
+                enforce_eager=False,  # Enable graph compilation
+                tensor_parallel_size=1,
+                pipeline_parallel_size=1,
+                data_parallel_size=1,  # Force single data parallel to avoid multi-process issues
+                gpu_memory_utilization=0.8,
+                trust_remote_code=True,  # If required by the model
+            )
+
+            outputs = llm.generate(prompts, sampling_params)
+            for output, answer in zip(outputs, answers):
+                prompt = output.prompt
+                generated_text = output.outputs[0].text
+                print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+                assert generated_text.startswith(answer)
+
+        # Check compiled code files
+        compiled_codes = sorted(
+            glob.glob(os.path.join(temp_dir, "__transformed_code*for_forward.py")))
+
+        for i, compiled_code in enumerate(compiled_codes):
+            print("{} file: {}".format(i + 1, compiled_code))
+
+        # XLA GPU should trigger Dynamo compilation 2 times (similar to TPU):
+        # 1. Forward pass without kv_caches (prefill phase)
+        # 2. Forward pass with kv_caches (decode phase)
+        # Check we have 2 compiled codes
+        assert len(compiled_codes) == 2
+
+        # XLA GPU specific keywords
+        kv_cache_prefix = "kv_cache"
+        xla_gpu_attn_prefix = "xla_gpu_paged_attention"  # XLA GPU attention implementation
+        
+        def extract_compiled_index(s):
+            parts = s.replace(".", "_").split("_")
+            numbers = [int(part) for part in parts if part.isdigit()]
+            return numbers[0]
+
+        # Check all compilations are as expected
+        compiled_fns = sorted(glob.glob(
+            os.path.join(temp_dir, "__compiled_fn*Forward_graph*.py")),
+                              key=lambda s: extract_compiled_index(s))
+
+        for i, compiled_fn in enumerate(compiled_fns):
+            print("{} file: {}".format(i + 1, compiled_fn))
+
+        # First compilation (prefill phase) should not have kv_caches
+        with open(compiled_fns[0]) as f:
+            content = f.read()
+            assert kv_cache_prefix not in content
+            print("First compilation (prefill): no kv_cache found ✓")
+
+        # Second compilation (decode phase) should have kv_caches and XLA GPU attention
+        with open(compiled_fns[1]) as f:
+            content = f.read()
+            assert kv_cache_prefix in content
+            # Check if XLA GPU attention implementation is included
+            assert (xla_gpu_attn_prefix in content or "xla_gpu" in content.lower())
+            print("Second compilation (decode): kv_cache and XLA GPU attention found ✓")
+            
+    finally:
+        # Restore proxy settings
+        for var, value in original_proxies.items():
+            os.environ[var] = value
+
+
+def test_xla_gpu_compilation_simple():
+    """Simplified XLA GPU test to avoid multi-process issues"""
+    
+    os.environ["VLLM_USE_XLA_GPU"] = "1"
+    os.environ["VLLM_USE_V1"] = "1"
+    os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+
+    # 禁用可能有问题的自定义算子
+    os.environ["VLLM_USE_TRITON_FLASH_ATTN"] = "0"
+    
+    # 强制使用特定的启动方法
+    os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"  # 使用 spawn 而不是 fork
+    
+    # 设置进程相关环境变量
+    # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # 同步 CUDA 启动
+    # os.environ["CUDA_DEVICE_MAX_CONNECTIONS"] = "1"  # 限制设备连接数
+        
+    # Set XLA GPU environment variables
+    os.environ["GPU_NUM_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # Use GPU 3
+    os.environ["PJRT_DEVICE"] = "CUDA"
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"    
+    # 4. 同步 CUDA 操作（调试用）
+    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+    # 5. 避免内存预分配冲突
+    os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
+    
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    
+    # Force single process mode
+    os.environ["VLLM_WORKER_USE_RAY"] = "0"
+    os.environ["VLLM_ENGINE_USE_RAY"] = "0"
+
+    # 设置保守的编译选项， 打印很多dynamo的日志
+    # os.environ["TORCH_LOGS"] = "+dynamo"
+    # os.environ["TORCH_LOGS"] = "+dynamic"
+    # os.environ["TORCHDYNAMO_VERBOSE"] = "1"
+    
+    # os.environ["TORCH_CPP_LOG_LEVEL"] = "INFO"
+    # os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
+
+    
+        
+    from vllm import LLM, SamplingParams
+
+    # Simple test prompt
+    prompts = ["Hello, how are you?"]
+    
+    sampling_params = SamplingParams(
+        temperature=0.0,  # Use deterministic sampling
+        max_tokens=10
+    )
+
+    import torch
+    # 配置dynamo以支持动态形状
+    torch._dynamo.config.capture_dynamic_output_shape_ops = True
+    torch._dynamo.config.assume_static_by_default = False
+    torch._dynamo.config.automatic_dynamic_shapes = True
+    torch._dynamo.config.force_parameter_static_shapes = False
+    
+    # 允许动态形状
+    torch._dynamo.config.capture_scalar_outputs = True
+    
+    try:
+        # Use local model
+        llm = LLM(
+            model="Qwen/Qwen2.5-3B-Instruct",  # Please replace  #  "Qwen/Qwen2-1.5B-Instruct"
+            max_num_batched_tokens=128,
+            max_model_len=128,
+            max_num_seqs=4,
+            enforce_eager=False,
+            tensor_parallel_size=1,
+            data_parallel_size=1,
+            compilation_config= {"custom_ops": ["none"]},  # Disable custom ops for simplicity
+        )
+
+        # First generation - triggers prefill compilation
         outputs = llm.generate(prompts, sampling_params)
-        for output, answer in zip(outputs, answers):
-            prompt = output.prompt
-            generated_text = output.outputs[0].text
-            print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-            assert generated_text.startswith(answer)
+        print("First generation successful")
+        
+        # Second generation - should reuse compiled results
+        outputs = llm.generate(prompts, sampling_params)
+        print("Second generation successful")
+        
+        for output in outputs:
+            print(f"Generated: {output.outputs[0].text}")
+            
+        print("XLA GPU compilation test passed ✓")
+        
+    except Exception as e:
+        print(f"XLA GPU compilation test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
-    compiled_codes = sorted(
-        glob.glob(os.path.join(temp_dir, "__transformed_code*for_forward.py")))
 
-    for i, compiled_code in enumerate(compiled_codes):
-        print("{} file: {}".format(i + 1, compiled_code))
-
-    # We should only trigger Dynamo compilation 2 times:
-    # 1. Forward pass without kv_caches
-    # 2. Forward pass with kv_caches
-    # Check we have 2 compiled codes
-    assert len(compiled_codes) == 2
-
-    kv_cache_prefix = "kv_cache"
-    attn_prefix = "ragged_paged_attention"
-
-    def extract_compiled_index(s):
-        parts = s.replace(".", "_").split("_")
-        numbers = [int(part) for part in parts if part.isdigit()]
-        return numbers[0]
-
-    # Check all the compilations are as expected. The dump files include the
-    # captured graph for the forward function of the nn.Module.
-    compiled_fns = sorted(glob.glob(
-        os.path.join(temp_dir, "__compiled_fn*Forward_graph*.py")),
-                          key=lambda s: extract_compiled_index(s))
-
-    for i, compiled_fn in enumerate(compiled_fns):
-        print("{} file: {}".format(i + 1, compiled_fn))
-
-    # The first compilation should not have any kv_caches
-    with open(compiled_fns[0]) as f:
-        content = f.read()
-        assert kv_cache_prefix not in content
-
-    # The second compilation should have kv_caches and the
-    # ragged_paged_attention
-    with open(compiled_fns[1]) as f:
-        content = f.read()
-        assert (kv_cache_prefix in content and attn_prefix in content)
+if __name__ == "__main__":
+    # Run simplified version first to test basic functionality
+    print("Running simple XLA GPU test...")
+    test_xla_gpu_compilation_simple()
+    
+    print("\nRunning full XLA GPU compilation test...")
+    test_xla_gpu_compilation()

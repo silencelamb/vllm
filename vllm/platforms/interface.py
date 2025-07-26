@@ -146,6 +146,12 @@ class Platform:
         # when encountering unsupported dtypes in "auto" dtype.
         return [torch.bfloat16, torch.float16, torch.float32]
 
+    def is_xla_gpu(self) -> bool:
+        return self._enum == PlatformEnum.XLA_GPU
+
+    def is_xla_cpu(self) -> bool:
+        return self._enum == PlatformEnum.XLA_CPU
+    
     def is_cuda(self) -> bool:
         return self._enum == PlatformEnum.CUDA
 

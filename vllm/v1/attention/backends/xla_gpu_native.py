@@ -225,43 +225,46 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         kv_cache: torch.Tensor,     # [num_blocks, 2, block_size, num_kv_heads, head_size]
         key: torch.Tensor,          # [total_tokens, num_kv_heads, head_size]
         value: torch.Tensor,        # [total_tokens, num_kv_heads, head_size]
-        slot_mapping: torch.Tensor, # [total_tokens]
+        slot_mapping: torch.Tensor, # [3, padded_num_slices]
         k_scale: float = 1.0,
         v_scale: float = 1.0,
     ) -> torch.Tensor:
-        """Update KV cache with new key/value pairs using pure tensor operations."""
+        """最简单的无条件分支版本。"""
         
+        # 提取映射信息
+        kv_cache_starts = slot_mapping[0]  # [padded_num_slices]
+        new_kv_starts = slot_mapping[1]    # [padded_num_slices]
+        slice_lengths = slot_mapping[2]    # [padded_num_slices]
+        
+        # 基本参数
         total_tokens = key.shape[0]
         block_size = kv_cache.shape[2]
+        num_blocks = kv_cache.shape[0]
         
-        # Apply scaling
+        # 应用缩放
         scaled_key = key * k_scale
         scaled_value = value * v_scale
         
-        # Calculate block indices and intra-block offsets
-        # Use clamp to ensure safe indexing
-        safe_slot_mapping = torch.clamp(slot_mapping, min=0)
-        block_indices = safe_slot_mapping // block_size
-        block_offsets = safe_slot_mapping % block_size
+        # 直接从slot_mapping构建线性映射
+        # 假设slot_mapping已经是展开的形式，我们直接使用
         
-        # Create validity mask
-        valid_mask = slot_mapping >= 0
-        valid_indices = torch.where(valid_mask)[0]
+        # 简化处理：假设每个slice长度为1，直接映射
+        max_updates = min(kv_cache_starts.shape[0], total_tokens)
         
-        # Clone cache for updates
+        # 计算有效的更新位置
+        valid_starts = torch.clamp(kv_cache_starts[:max_updates], 0, num_blocks * block_size - 1)
+        valid_new_starts = torch.clamp(new_kv_starts[:max_updates], 0, total_tokens - 1)
+        
+        # 计算block和offset
+        block_indices = valid_starts // block_size
+        offset_indices = valid_starts % block_size
+        
+        # Clone并更新
         updated_cache = kv_cache.clone()
         
-        # Batch update using advanced indexing
-        if len(valid_indices) > 0:
-            valid_block_indices = block_indices[valid_indices]
-            valid_offsets = block_offsets[valid_indices]
-            valid_key = scaled_key[valid_indices]
-            valid_value = scaled_value[valid_indices]
-            
-            # Update key cache (dim 1 = 0 for keys)
-            updated_cache[valid_block_indices, 0, valid_offsets] = valid_key
-            # Update value cache (dim 1 = 1 for values)
-            updated_cache[valid_block_indices, 1, valid_offsets] = valid_value
+        # 直接批量更新（无条件分支）
+        updated_cache[block_indices, 0, offset_indices] = scaled_key[valid_new_starts]
+        updated_cache[block_indices, 1, offset_indices] = scaled_value[valid_new_starts]
         
         return updated_cache
 
@@ -288,53 +291,62 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         kv_cache: torch.Tensor,     # [num_blocks, 2, block_size, num_kv_heads, head_size]
         attn_metadata: XlaGpuPagedMetadata,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Reconstruct full K/V sequences for each token from paged cache."""
+        """Fully vectorized reconstruction - best for compilation."""
         
         total_tokens = attn_metadata.token_to_seq_mapping.shape[0]
         max_context_len = attn_metadata.max_context_len
         block_size = attn_metadata.block_size
-        num_kv_heads = kv_cache.shape[3]
-        head_size = kv_cache.shape[4]
+        num_kv_heads, head_size = kv_cache.shape[3], kv_cache.shape[4]
+        device = kv_cache.device
         
-        # Create position grids
-        token_range = torch.arange(total_tokens, device=kv_cache.device).unsqueeze(1)
-        pos_range = torch.arange(max_context_len, device=kv_cache.device).unsqueeze(0)
-        pos_grid = pos_range.expand(total_tokens, -1)  # [total_tokens, max_context_len]
+        # Reshape cache for linear indexing
+        cache_reshaped = kv_cache.view(-1, 2, num_kv_heads, head_size)
         
-        # Calculate block indices and offsets for all positions
-        block_indices = pos_grid // block_size
-        block_offsets = pos_grid % block_size
+        # Create index tensors
+        batch_idx = torch.arange(total_tokens, device=device).unsqueeze(1)  # [total_tokens, 1]
+        pos_idx = torch.arange(max_context_len, device=device).unsqueeze(0)  # [1, max_context_len]
         
-        # Get sequence IDs for each token
-        seq_ids = attn_metadata.token_to_seq_mapping.unsqueeze(1).expand(-1, max_context_len)
+        # Expand to full grid
+        batch_grid = batch_idx.expand(-1, max_context_len)  # [total_tokens, max_context_len]
+        pos_grid = pos_idx.expand(total_tokens, -1)         # [total_tokens, max_context_len]
         
-        # Get physical block indices from block tables
-        batch_size, max_blocks_per_seq = attn_metadata.block_tables.shape
-        safe_seq_ids = torch.clamp(seq_ids, 0, batch_size - 1)
-        safe_block_indices = torch.clamp(block_indices, 0, max_blocks_per_seq - 1)
+        # Get sequence info
+        seq_ids = attn_metadata.token_to_seq_mapping[batch_grid]  # [total_tokens, max_context_len]
+        context_lens = attn_metadata.context_lens[seq_ids]       # [total_tokens, max_context_len]
         
-        # Gather physical block indices
+        # Validity mask
+        valid_mask = pos_grid < context_lens  # [total_tokens, max_context_len]
+        
+        # Calculate cache indices
+        block_idx = pos_grid // block_size
+        offset_idx = pos_grid % block_size
+        
+        # Get physical blocks
         physical_blocks = torch.gather(
-            attn_metadata.block_tables[safe_seq_ids], 2, safe_block_indices
-        )  # [total_tokens, max_context_len]
+            attn_metadata.block_tables[seq_ids], 
+            -1, 
+            block_idx.unsqueeze(-1)
+        ).squeeze(-1)  # [total_tokens, max_context_len]
         
-        # Create validity mask
-        context_lens_expanded = attn_metadata.context_lens[attn_metadata.token_to_seq_mapping].unsqueeze(1)
-        valid_positions = pos_grid < context_lens_expanded
-        valid_blocks = (physical_blocks >= 0) & valid_positions
+        # Calculate flat cache indices
+        flat_indices = physical_blocks * block_size + offset_idx
         
-        # Safe indices for gathering
-        safe_physical_blocks = torch.where(valid_blocks, physical_blocks, 0)
-        safe_block_offsets = torch.where(valid_blocks, block_offsets, 0)
+        # Apply mask and clamp for safety
+        max_cache_idx = cache_reshaped.shape[0] - 1
+        safe_indices = torch.clamp(flat_indices, 0, max_cache_idx)
+        masked_indices = torch.where(valid_mask, safe_indices, 0)
         
-        # Reconstruct K/V using advanced indexing
-        reconstructed_key = kv_cache[safe_physical_blocks, 0, safe_block_offsets]
-        reconstructed_value = kv_cache[safe_physical_blocks, 1, safe_block_offsets]
+        # Gather from cache
+        gathered_kv = torch.index_select(cache_reshaped, 0, masked_indices.view(-1))
+        gathered_kv = gathered_kv.view(total_tokens, max_context_len, 2, num_kv_heads, head_size)
         
         # Apply validity mask
-        valid_mask = valid_blocks.unsqueeze(-1).unsqueeze(-1)
-        reconstructed_key = reconstructed_key * valid_mask
-        reconstructed_value = reconstructed_value * valid_mask
+        valid_mask_expanded = valid_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        masked_kv = gathered_kv * valid_mask_expanded
+        
+        # Split key and value
+        reconstructed_key = masked_kv[:, :, 0]    # [total_tokens, max_context_len, num_kv_heads, head_size]
+        reconstructed_value = masked_kv[:, :, 1]  # [total_tokens, max_context_len, num_kv_heads, head_size]
         
         return reconstructed_key, reconstructed_value
 

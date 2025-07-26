@@ -28,8 +28,8 @@ from .cuda import with_nvml_context, pynvml
 class XlaGpuPlatform(Platform):
     _enum = PlatformEnum.XLA_GPU
     device_name: str = "xla_gpu"
-    device_type: str = "xla_gpu"
-    dispatch_key: str = "XLA_GPU"
+    device_type: str = "xla"
+    dispatch_key: str = "XLA"
     ray_device_key: str = "XLA_GPU"
     dist_backend: str = "NCCL"
     device_control_env_var: str = "CUDA_VISIBLE_DEVICES"
@@ -121,9 +121,8 @@ class XlaGpuPlatform(Platform):
                 "Using bfloat16 instead.", model_config.dtype)
             model_config.dtype = torch.bfloat16
 
-        from vllm.v1.attention.backends.pallas import PallasAttentionBackend
-        cache_config.block_size = PallasAttentionBackend.get_page_size(
-            vllm_config)  # type: ignore[assignment]
+        if cache_config and cache_config.block_size is None:
+            cache_config.block_size = 16
 
         parallel_config = vllm_config.parallel_config
         scheduler_config = vllm_config.scheduler_config
