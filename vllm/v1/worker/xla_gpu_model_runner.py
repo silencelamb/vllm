@@ -153,18 +153,18 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         self.sliding_window = model_config.get_sliding_window()
         self.block_size = cache_config.block_size
         self.max_model_len = model_config.max_model_len
-        self.most_model_len = envs.VLLM_XLA_GPU_MOST_MODEL_LEN  # Changed from TPU env
         self.max_num_blocks_per_req = cdiv(self.max_model_len, self.block_size)
-        self.num_blocks_per_most_len_req = cdiv(
-            self.most_model_len,
-            self.block_size) if self.most_model_len is not None else None
+        
+        # Remove TPU-specific most_model_len logic for XLA GPU
+        # XLA GPU can handle variable sequence lengths more efficiently
+        
         # InputBatch needs to work with sampling tensors greater than padding
         # to avoid dynamic shapes. Also, avoid suboptimal alignment.
         self.max_num_reqs = max(scheduler_config.max_num_seqs, MIN_NUM_SEQS)
         self.num_tokens_paddings = _get_token_paddings(
             min_token_size=16,
             max_token_size=scheduler_config.max_num_batched_tokens,
-            padding_gap=envs.VLLM_XLA_GPU_BUCKET_PADDING_GAP)  # Changed from TPU env
+            padding_gap=envs.VLLM_XLA_GPU_BUCKET_PADDING_GAP)
         # In case `max_num_tokens < max(num_tokens_paddings)` use the actual
         # padded max value to pre-allocate data structures and pre-compile.
         self.max_num_tokens = self.num_tokens_paddings[-1]
@@ -231,16 +231,6 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             (self.max_num_reqs, self.max_num_blocks_per_req),
             dtype=torch.int32,
             device="cpu")
-        
-        # Adjust num_reqs to avoid GPU memory limitations
-        self.num_reqs_most_model_len = min(
-            XlaGpuAttentionBackend.get_max_num_seqs(self.most_model_len,
-                                                    self.block_size),
-            self.max_num_reqs) if self.most_model_len is not None else None
-        self.num_reqs_max_model_len = min(
-            XlaGpuAttentionBackend.get_max_num_seqs(self.max_model_len,
-                                                    self.block_size),
-            self.max_num_reqs)
         
         self.query_start_loc_cpu = torch.zeros(self.max_num_tokens + 1,
                                                dtype=torch.int32,
@@ -606,34 +596,17 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         assert start_index < num_reqs
 
         # Get the number of scheduled tokens for each request.
-        use_max_model_len = self.most_model_len is None
         num_scheduled_tokens_per_req = []
-        max_num_scheduled_tokens_all_reqs = 0
-        end_index = start_index
+        end_index = num_reqs  # For XLA GPU, process all requests at once
 
-        # Use either most_model_len or max_model_len depending on request size.
+        # XLA GPU can handle variable sequence lengths efficiently
+        # No need to split based on most_model_len vs max_model_len
         for i in range(start_index, num_reqs):
             req_id = self.input_batch.req_ids[i]
             assert req_id is not None
             num_tokens = scheduler_output.num_scheduled_tokens[req_id]
-            if not use_max_model_len and num_tokens > self.most_model_len:
-                use_max_model_len = True
             num_scheduled_tokens_per_req.append(num_tokens)
-        if use_max_model_len:
-            if len(num_scheduled_tokens_per_req) > self.num_reqs_max_model_len:
-                num_scheduled_tokens_per_req = \
-                    num_scheduled_tokens_per_req[:self.num_reqs_max_model_len]
-                end_index = start_index + self.num_reqs_max_model_len
-            else:
-                end_index = num_reqs
-        else:
-            if len(num_scheduled_tokens_per_req
-                   ) > self.num_reqs_most_model_len:
-                num_scheduled_tokens_per_req = \
-                    num_scheduled_tokens_per_req[:self.num_reqs_most_model_len]
-                end_index = start_index + self.num_reqs_most_model_len
-            else:
-                end_index = num_reqs
+
         max_num_scheduled_tokens_all_reqs = max(num_scheduled_tokens_per_req)
         num_scheduled_tokens_per_req = np.array(num_scheduled_tokens_per_req,
                                                 dtype=np.int32)
@@ -697,28 +670,14 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         self.position_ids = self.positions_cpu[:
                                                padded_total_num_scheduled_tokens].to(
                                                    self.device)
-        if use_max_model_len:
-            block_tables = self.block_table_cpu[:self.num_reqs_max_model_len, :
-                                                self.max_num_blocks_per_req]
-            block_tables[:num_reqs, :self.max_num_blocks_per_req] = (
-                self.input_batch.block_table[0].get_cpu_tensor()[:num_reqs])
-            query_start_loc = self.query_start_loc_cpu[:self.
-                                                       num_reqs_max_model_len +
-                                                       1].to(self.device)
-            seq_lens = self.seq_lens_cpu[:self.num_reqs_max_model_len].to(
-                self.device)
-        else:
-            block_tables = self.block_table_cpu[:self.
-                                                num_reqs_most_model_len, :self.
-                                                num_blocks_per_most_len_req]
-            block_tables[:num_reqs, :self.num_blocks_per_most_len_req] = (
-                self.input_batch.block_table[0].get_cpu_tensor()
-                [:num_reqs, :self.num_blocks_per_most_len_req])
-            query_start_loc = self.query_start_loc_cpu[:self.
-                                                       num_reqs_most_model_len +
-                                                       1].to(self.device)
-            seq_lens = self.seq_lens_cpu[:self.num_reqs_most_model_len].to(
-                self.device)
+        
+        # Simplified for XLA GPU - use max_model_len consistently
+        block_tables = self.block_table_cpu[:self.max_num_reqs, :
+                                            self.max_num_blocks_per_req]
+        block_tables[:num_reqs, :self.max_num_blocks_per_req] = (
+            self.input_batch.block_table[0].get_cpu_tensor()[:num_reqs])
+        query_start_loc = self.query_start_loc_cpu[:self.max_num_reqs + 1].to(self.device)
+        seq_lens = self.seq_lens_cpu[:self.max_num_reqs].to(self.device)
         block_tables = block_tables.to(self.device)
 
         # Calculate the slot mapping
@@ -1324,11 +1283,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         start = time.perf_counter()
         for num_tokens in self.num_tokens_paddings:
             logger.info("  -- num_tokens: %d", num_tokens)
-            self._dummy_run(num_tokens, self.num_reqs_max_model_len,
-                            self.max_num_blocks_per_req)
-            if self.most_model_len is not None:
-                self._dummy_run(num_tokens, self.num_reqs_most_model_len,
-                                self.num_blocks_per_most_len_req)
+            # Simplified for XLA GPU - use consistent parameters
+            self._dummy_run(num_tokens, self.max_num_reqs, self.max_num_blocks_per_req)
         xm.wait_device_ops()
         end = time.perf_counter()
         logger.info("Compilation finished in %.2f [secs].", end - start)
@@ -1516,12 +1472,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             # Cache the dummy encoder outputs.
             self.encoder_cache["tmp"] = dict(enumerate(dummy_encoder_outputs))
 
-        # Trigger compilation for general shape.
-        self._dummy_run(num_tokens, self.num_reqs_max_model_len,
-                        self.max_num_blocks_per_req)
-        if self.most_model_len is not None:
-            self._dummy_run(num_tokens, self.num_reqs_most_model_len,
-                            self.num_blocks_per_most_len_req)
+        # Trigger compilation for general shape - simplified for XLA GPU
+        self._dummy_run(num_tokens, self.max_num_reqs, self.max_num_blocks_per_req)
 
         xm.mark_step()
         xm.wait_device_ops()
