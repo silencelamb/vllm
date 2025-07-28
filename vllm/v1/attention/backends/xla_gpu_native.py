@@ -335,17 +335,24 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         query: torch.Tensor,        # [total_tokens, num_heads, head_size]
         key: torch.Tensor,          # [total_tokens, max_context_len, num_kv_heads, head_size]
         value: torch.Tensor,        # [total_tokens, max_context_len, num_kv_heads, head_size]
-        attention_mask: torch.Tensor, # [total_tokens, max_context_len]
+        attention_mask: torch.Tensor, # [total_tokens, actual_context_len]
     ) -> torch.Tensor:
         """Unified attention computation for all tokens."""
         
         total_tokens, num_heads, head_size = query.shape
-        max_context_len = key.shape[1]
+        # Use the attention mask's context length as the authoritative source
+        max_context_len = attention_mask.shape[1]
+        
+        # Always slice key and value to match mask dimensions
+        # This is safe even if they already match
+        key = key[:, :max_context_len]
+        value = value[:, :max_context_len]
         
         # Handle GQA/MQA by repeating KV heads
-        if self.num_kv_heads != num_heads:
-            key = key.repeat_interleave(self.num_queries_per_kv, dim=2)
-            value = value.repeat_interleave(self.num_queries_per_kv, dim=2)
+        # Always apply repeat_interleave with the appropriate factor
+        # When num_queries_per_kv = 1, this is a no-op
+        key = key.repeat_interleave(self.num_queries_per_kv, dim=2)
+        value = value.repeat_interleave(self.num_queries_per_kv, dim=2)
         
         # Compute attention scores
         # Reshape for batch matrix multiplication
@@ -361,8 +368,10 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         scores = scores + mask_expanded
         
         # Apply logits soft cap if specified
-        if self.logits_soft_cap is not None:
-            scores = torch.tanh(scores / self.logits_soft_cap) * self.logits_soft_cap
+        # To avoid conditional, we use a very large value when soft cap is not needed
+        # This makes the tanh operation essentially a no-op
+        soft_cap = self.logits_soft_cap if self.logits_soft_cap is not None else 1e10
+        scores = torch.tanh(scores / soft_cap) * soft_cap
         
         # Softmax
         attn_weights = torch.softmax(scores, dim=-1)
