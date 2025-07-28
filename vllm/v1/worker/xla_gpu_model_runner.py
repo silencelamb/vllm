@@ -715,6 +715,12 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             num_tokens_for_req = num_scheduled_tokens_per_req[req_idx]
             token_to_seq_mapping.extend([req_idx] * num_tokens_for_req)
 
+        # Pad token_to_seq_mapping to match padded input size
+        # Pad with the last request index (or 0 if no requests)
+        pad_value = num_reqs - 1 if num_reqs > 0 else 0
+        padding_length = padded_total_num_scheduled_tokens - total_num_scheduled_tokens
+        token_to_seq_mapping.extend([pad_value] * padding_length)
+
         token_to_seq_mapping = torch.tensor(token_to_seq_mapping, 
                                             dtype=torch.int32, 
                                             device=self.device)
@@ -725,7 +731,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # 3. More precise attention_mask calculation
         if max_context_len > 0:
             attention_mask = torch.zeros(
-                (total_num_scheduled_tokens, max_context_len),
+                (padded_total_num_scheduled_tokens, max_context_len),
                 dtype=torch.float32, device=self.device
             )
             
@@ -744,13 +750,17 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                     attention_mask[token_idx, current_pos_in_seq + 1:] = float('-inf')
                     
                     token_idx += 1
+            
+            # Fill padding tokens with safe values (cannot attend to anything)
+            attention_mask[total_num_scheduled_tokens:, :] = float('-inf')
         else:
-            attention_mask = torch.zeros((total_num_scheduled_tokens, 1),
+            attention_mask = torch.zeros((padded_total_num_scheduled_tokens, 1),
                                         dtype=torch.float32, device=self.device)
+            attention_mask[total_num_scheduled_tokens:, :] = float('-inf')
 
         # 4. Calculate is_prefill_token
         # Determine which tokens are prefill (first-time processing) vs decode (generation)
-        is_prefill_token = torch.zeros(total_num_scheduled_tokens, 
+        is_prefill_token = torch.zeros(padded_total_num_scheduled_tokens, 
                                     dtype=torch.bool, device=self.device)
 
         token_idx = 0
@@ -767,6 +777,9 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             for _ in range(num_scheduled):
                 is_prefill_token[token_idx] = is_prefill
                 token_idx += 1
+        
+        # Padding tokens are marked as decode (False)
+        is_prefill_token[total_num_scheduled_tokens:] = False
 
         # Create XlaGpuPagedMetadata with all required fields
         attn_metadata = XlaGpuPagedMetadata(
