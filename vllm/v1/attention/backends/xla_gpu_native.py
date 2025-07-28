@@ -249,22 +249,31 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # 假设slot_mapping已经是展开的形式，我们直接使用
         
         # 简化处理：假设每个slice长度为1，直接映射
-        max_updates = min(kv_cache_starts.shape[0], total_tokens)
+        # 使用前total_tokens个slot mapping entries
+        num_updates = min(slice_lengths.shape[0], total_tokens)
         
-        # 计算有效的更新位置
-        valid_starts = torch.clamp(kv_cache_starts[:max_updates], 0, num_blocks * block_size - 1)
-        valid_new_starts = torch.clamp(new_kv_starts[:max_updates], 0, total_tokens - 1)
+        # 创建有效的mask，只处理slice_length > 0的entries
+        valid_mask = slice_lengths[:num_updates] > 0
         
-        # 计算block和offset
-        block_indices = valid_starts // block_size
-        offset_indices = valid_starts % block_size
+        # 获取有效的indices
+        valid_kv_starts = kv_cache_starts[:num_updates][valid_mask]
+        valid_new_starts = new_kv_starts[:num_updates][valid_mask]
+        
+        # 确保索引在有效范围内
+        valid_new_starts = torch.clamp(valid_new_starts, 0, total_tokens - 1)
+        valid_kv_starts = torch.clamp(valid_kv_starts, 0, num_blocks * block_size - 1)
+        
+        # 计算block和offset indices
+        block_indices = valid_kv_starts // block_size
+        offset_indices = valid_kv_starts % block_size
         
         # Clone并更新
         updated_cache = kv_cache.clone()
         
-        # 直接批量更新（无条件分支）
-        updated_cache[block_indices, 0, offset_indices] = scaled_key[valid_new_starts]
-        updated_cache[block_indices, 1, offset_indices] = scaled_value[valid_new_starts]
+        # 批量更新KV cache
+        if valid_mask.any():
+            updated_cache[block_indices, 0, offset_indices] = scaled_key[valid_new_starts]
+            updated_cache[block_indices, 1, offset_indices] = scaled_value[valid_new_starts]
         
         return updated_cache
 

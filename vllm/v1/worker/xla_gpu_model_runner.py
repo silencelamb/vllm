@@ -781,6 +781,14 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # Padding tokens are marked as decode (False)
         is_prefill_token[total_num_scheduled_tokens:] = False
 
+        # Debug slot_mapping shape
+        logger.debug(f"slot_mapping_metadata shape: {slot_mapping_metadata.shape}")
+        logger.debug(f"block_tables shape: {block_tables.shape}")
+        logger.debug(f"seq_lens shape: {seq_lens.shape}")
+        logger.debug(f"token_to_seq_mapping shape: {token_to_seq_mapping.shape}")
+        logger.debug(f"attention_mask shape: {attention_mask.shape}")
+        logger.debug(f"is_prefill_token shape: {is_prefill_token.shape}")
+        
         # Create XlaGpuPagedMetadata with all required fields
         attn_metadata = XlaGpuPagedMetadata(
             # Original fields
@@ -1014,21 +1022,28 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             
             # Debug logging
             logger.debug(f"input_ids: {input_ids}")
+            logger.debug(f"input_ids shape: {input_ids.shape}")
             logger.debug(f"padded_num_reqs: {padded_num_reqs}, num_reqs: {num_reqs}, "
                         f"total_num_scheduled_tokens: {scheduler_output.total_num_scheduled_tokens}")
             logger.debug(f"position_ids: {self.position_ids}")
+            logger.debug(f"position_ids shape: {self.position_ids.shape}")
+            logger.debug(f"padded_total_num_scheduled_tokens: {padded_total_num_scheduled_tokens}")
             
             xm.mark_step()
             # Run the decoder
             # Use the actual padded number of tokens for forward context
             padded_total_num_scheduled_tokens = input_ids.shape[0]
+            
+            # Ensure all inputs use consistent shapes
+            position_ids_to_use = self.position_ids
+            
             with set_forward_context(
                     attn_metadata,
                     self.vllm_config,
                     num_tokens=padded_total_num_scheduled_tokens):
                 hidden_states = self.model(
                     input_ids=input_ids,
-                    positions=self.position_ids,
+                    positions=position_ids_to_use,
                     inputs_embeds=inputs_embeds,
                 )
             hidden_states = self.select_hidden_states(hidden_states,
