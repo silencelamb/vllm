@@ -177,6 +177,9 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             if output is None:
                 output = torch.zeros_like(query)
             return output
+        
+        # Store original query shape for output
+        original_query_shape = query.shape
 
         # Get scaling factors
         k_scale = getattr(layer, '_k_scale_float', 1.0)
@@ -190,35 +193,38 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
 
         # Optional head size padding for better performance
         original_head_size = self.head_size
-        if self.head_size % XLA_GPU_HEAD_SIZE_ALIGNMENT != 0:
-            padded_head_size = ((self.head_size + XLA_GPU_HEAD_SIZE_ALIGNMENT - 1) 
-                               // XLA_GPU_HEAD_SIZE_ALIGNMENT * XLA_GPU_HEAD_SIZE_ALIGNMENT)
-            query = torch.nn.functional.pad(
-                query, (0, padded_head_size - self.head_size), value=0.0)
-            key = torch.nn.functional.pad(
-                key, (0, padded_head_size - self.head_size), value=0.0)
-            value = torch.nn.functional.pad(
-                value, (0, padded_head_size - self.head_size), value=0.0)
+        # Always compute padded size (when already aligned, padding is 0)
+        padded_head_size = ((self.head_size + XLA_GPU_HEAD_SIZE_ALIGNMENT - 1) 
+                           // XLA_GPU_HEAD_SIZE_ALIGNMENT * XLA_GPU_HEAD_SIZE_ALIGNMENT)
+        padding_size = padded_head_size - self.head_size
+        
+        # Always apply padding (when padding_size is 0, this is a no-op)
+        query = torch.nn.functional.pad(
+            query, (0, padding_size), value=0.0)
+        key = torch.nn.functional.pad(
+            key, (0, padding_size), value=0.0)
+        value = torch.nn.functional.pad(
+            value, (0, padding_size), value=0.0)
 
-        # Update KV cache if not sharing with another layer
-        if self.kv_sharing_target_layer_name is None and kv_cache.numel() > 0:
-            updated_kv_cache = self._update_kv_cache(
-                kv_cache, key, value, attn_metadata.slot_mapping, k_scale, v_scale
-            )
-        else:
-            updated_kv_cache = kv_cache
+        # Update KV cache
+        # When sharing is enabled or cache is empty, this returns the original cache
+        updated_kv_cache = self._update_kv_cache(
+            kv_cache, key, value, attn_metadata.slot_mapping, k_scale, v_scale
+        )
 
         # Perform attention computation
         output_tensor = self._compute_attention(
             query, updated_kv_cache, attn_metadata
         )
 
-        # Remove padding if applied
-        if self.head_size % XLA_GPU_HEAD_SIZE_ALIGNMENT != 0:
-            output_tensor = output_tensor[:, :, :original_head_size]
+        # Remove padding (when no padding was applied, this slices to the same size)
+        output_tensor = output_tensor[:, :, :original_head_size]
 
-        # Reshape back to original format
-        return output_tensor.reshape(total_tokens, self.num_heads * original_head_size)
+        # Reshape back to original format matching the query shape
+        # Use the stored original query shape to ensure consistency
+        output_reshaped = output_tensor.reshape(original_query_shape)
+        
+        return output_reshaped
 
     def _update_kv_cache(
         self,
