@@ -224,7 +224,7 @@ class XlaGpuWorker:
         
         # Calculate memory used by model weights and activations
         # Use more precise heuristics
-        model_memory = current_memory * 1.05  # 5% buffer for XLA GPU
+        model_memory = current_memory * 6  # 5% buffer for XLA GPU
         
         # Calculate memory available for KV cache
         usable_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
