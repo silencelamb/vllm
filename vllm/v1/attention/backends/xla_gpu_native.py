@@ -255,9 +255,14 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
     ) -> torch.Tensor:
         """Compute attention using reconstructed K/V and unified attention."""
         
-        # Reconstruct full K/V sequences for each token
-        reconstructed_key, reconstructed_value = self._reconstruct_kv_sequences(
-            kv_cache, attn_metadata
+        # Use attention mask's context length instead of max_context_len
+        # to ensure shape compatibility
+        actual_context_len = attn_metadata.attention_mask.shape[1]
+        
+        # Create a modified metadata with the correct context length
+        # We'll reconstruct K/V only up to the actual context length
+        reconstructed_key, reconstructed_value = self._reconstruct_kv_sequences_with_len(
+            kv_cache, attn_metadata, actual_context_len
         )
         
         # Unified attention computation
@@ -270,10 +275,20 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         kv_cache: torch.Tensor,     # [num_blocks, 2, block_size, num_kv_heads, head_size]
         attn_metadata: XlaGpuPagedMetadata,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Fully vectorized reconstruction - best for compilation."""
+        """Fully vectorized reconstruction - delegates to _reconstruct_kv_sequences_with_len."""
+        return self._reconstruct_kv_sequences_with_len(
+            kv_cache, attn_metadata, attn_metadata.max_context_len
+        )
+
+    def _reconstruct_kv_sequences_with_len(
+        self,
+        kv_cache: torch.Tensor,     # [num_blocks, 2, block_size, num_kv_heads, head_size]
+        attn_metadata: XlaGpuPagedMetadata,
+        context_len: int,  # Use this instead of attn_metadata.max_context_len
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Reconstruct K/V sequences with specified context length."""
         
         total_tokens = attn_metadata.token_to_seq_mapping.shape[0]
-        max_context_len = attn_metadata.max_context_len
         block_size = attn_metadata.block_size
         num_kv_heads, head_size = kv_cache.shape[3], kv_cache.shape[4]
         device = kv_cache.device
@@ -281,31 +296,40 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Reshape cache for linear indexing
         cache_reshaped = kv_cache.view(-1, 2, num_kv_heads, head_size)
         
-        # Create index tensors
+        # Create index tensors with the actual context length
         batch_idx = torch.arange(total_tokens, device=device).unsqueeze(1)  # [total_tokens, 1]
-        pos_idx = torch.arange(max_context_len, device=device).unsqueeze(0)  # [1, max_context_len]
+        pos_idx = torch.arange(context_len, device=device).unsqueeze(0)  # [1, context_len]
         
         # Expand to full grid
-        batch_grid = batch_idx.expand(-1, max_context_len)  # [total_tokens, max_context_len]
-        pos_grid = pos_idx.expand(total_tokens, -1)         # [total_tokens, max_context_len]
+        batch_grid = batch_idx.expand(-1, context_len)  # [total_tokens, context_len]
+        pos_grid = pos_idx.expand(total_tokens, -1)         # [total_tokens, context_len]
         
         # Get sequence info
-        seq_ids = attn_metadata.token_to_seq_mapping[batch_grid]  # [total_tokens, max_context_len]
-        context_lens = attn_metadata.context_lens[seq_ids]       # [total_tokens, max_context_len]
+        # First get seq_ids for each token
+        token_seq_ids = attn_metadata.token_to_seq_mapping  # [total_tokens]
+        # Expand to match grid shape
+        seq_ids_expanded = token_seq_ids.unsqueeze(1).expand(-1, context_len)  # [total_tokens, context_len]
+        # Get context lengths for each sequence
+        seq_context_lens = attn_metadata.context_lens[token_seq_ids]  # [total_tokens]
+        # Expand to match grid shape
+        context_lens_expanded = seq_context_lens.unsqueeze(1).expand(-1, context_len)  # [total_tokens, context_len]
         
         # Validity mask
-        valid_mask = pos_grid < context_lens  # [total_tokens, max_context_len]
+        valid_mask = pos_grid < context_lens_expanded  # [total_tokens, context_len]
         
         # Calculate cache indices
         block_idx = pos_grid // block_size
         offset_idx = pos_grid % block_size
         
         # Get physical blocks
+        # We need to gather from block_tables using the proper indices
+        # block_tables shape: [num_seqs, max_blocks_per_seq]
+        # We need to index with [total_tokens, context_len] grid
         physical_blocks = torch.gather(
-            attn_metadata.block_tables[seq_ids], 
+            attn_metadata.block_tables[token_seq_ids], 
             -1, 
-            block_idx.unsqueeze(-1)
-        ).squeeze(-1)  # [total_tokens, max_context_len]
+            block_idx
+        )  # [total_tokens, context_len]
         
         # Calculate flat cache indices
         flat_indices = physical_blocks * block_size + offset_idx
@@ -318,15 +342,15 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Gather from cache
         gathered_kv = torch.index_select(cache_reshaped, 0, masked_indices.view(-1))
-        gathered_kv = gathered_kv.view(total_tokens, max_context_len, 2, num_kv_heads, head_size)
+        gathered_kv = gathered_kv.view(total_tokens, context_len, 2, num_kv_heads, head_size)
         
         # Apply validity mask
         valid_mask_expanded = valid_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         masked_kv = gathered_kv * valid_mask_expanded
         
         # Split key and value
-        reconstructed_key = masked_kv[:, :, 0]    # [total_tokens, max_context_len, num_kv_heads, head_size]
-        reconstructed_value = masked_kv[:, :, 1]  # [total_tokens, max_context_len, num_kv_heads, head_size]
+        reconstructed_key = masked_kv[:, :, 0]    # [total_tokens, context_len, num_kv_heads, head_size]
+        reconstructed_value = masked_kv[:, :, 1]  # [total_tokens, context_len, num_kv_heads, head_size]
         
         return reconstructed_key, reconstructed_value
 
