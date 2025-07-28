@@ -270,10 +270,21 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Clone并更新
         updated_cache = kv_cache.clone()
         
-        # 批量更新KV cache
-        if valid_mask.any():
-            updated_cache[block_indices, 0, offset_indices] = scaled_key[valid_new_starts]
-            updated_cache[block_indices, 1, offset_indices] = scaled_value[valid_new_starts]
+        # 批量更新KV cache - 无条件执行以避免动态分支
+        # 当valid_mask为空时，索引操作不会有任何效果
+        if block_indices.numel() > 0:
+            # 使用scatter操作来避免直接索引赋值
+            # 这样即使索引为空也不会出错
+            updated_cache.index_put_(
+                (block_indices, torch.tensor(0, device=kv_cache.device), offset_indices),
+                scaled_key[valid_new_starts],
+                accumulate=False
+            )
+            updated_cache.index_put_(
+                (block_indices, torch.tensor(1, device=kv_cache.device), offset_indices),
+                scaled_value[valid_new_starts],
+                accumulate=False
+            )
         
         return updated_cache
 
