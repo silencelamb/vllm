@@ -156,75 +156,11 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         output: Optional[torch.Tensor] = None,
         output_scale: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Forward pass with XLA GPU paged attention.
-
-        Args:
-            query: shape = [total_tokens, num_heads * head_size]
-            key: shape = [total_tokens, num_kv_heads * head_size]
-            value: shape = [total_tokens, num_kv_heads * head_size]
-            kv_cache: shape = [num_blocks, 2, block_size, num_kv_heads, head_size]
-            attn_metadata: Metadata for attention.
-        Returns:
-            shape = [total_tokens, num_heads * head_size]
-        """
-        if output_scale is not None:
-            raise NotImplementedError(
-                "Fused output quantization is not yet supported for XLA GPU backend"
-            )
-
-        # Handle determine_available_memory case
-        if kv_cache.numel() == 0:
-            if output is None:
-                output = torch.zeros_like(query)
-            return output
+        """Forward pass with XLA GPU paged attention - MINIMAL VERSION FOR DEBUGGING."""
         
-        # Store original query shape for output
-        original_query_shape = query.shape
-
-        # Get scaling factors
-        k_scale = getattr(layer, '_k_scale_float', 1.0)
-        v_scale = getattr(layer, '_v_scale_float', 1.0)
-        
-        # Reshape tensors
-        total_tokens = query.shape[0]
-        query = query.view(total_tokens, self.num_heads, self.head_size)
-        key = key.view(total_tokens, self.num_kv_heads, self.head_size)
-        value = value.view(total_tokens, self.num_kv_heads, self.head_size)
-
-        # Optional head size padding for better performance
-        original_head_size = self.head_size
-        # Always compute padded size (when already aligned, padding is 0)
-        padded_head_size = ((self.head_size + XLA_GPU_HEAD_SIZE_ALIGNMENT - 1) 
-                           // XLA_GPU_HEAD_SIZE_ALIGNMENT * XLA_GPU_HEAD_SIZE_ALIGNMENT)
-        padding_size = padded_head_size - self.head_size
-        
-        # Always apply padding (when padding_size is 0, this is a no-op)
-        query = torch.nn.functional.pad(
-            query, (0, padding_size), value=0.0)
-        key = torch.nn.functional.pad(
-            key, (0, padding_size), value=0.0)
-        value = torch.nn.functional.pad(
-            value, (0, padding_size), value=0.0)
-
-        # Update KV cache
-        # When sharing is enabled or cache is empty, this returns the original cache
-        updated_kv_cache = self._update_kv_cache(
-            kv_cache, key, value, attn_metadata.slot_mapping, k_scale, v_scale
-        )
-
-        # Perform attention computation
-        output_tensor = self._compute_attention(
-            query, updated_kv_cache, attn_metadata
-        )
-
-        # Remove padding (when no padding was applied, this slices to the same size)
-        output_tensor = output_tensor[:, :, :original_head_size]
-
-        # Reshape back to original format matching the query shape
-        # Use the stored original query shape to ensure consistency
-        output_reshaped = output_tensor.reshape(original_query_shape)
-        
-        return output_reshaped
+        # TEMPORARY: Just return query as-is to test if the issue is in our attention
+        # This should make the model compile but produce nonsense output
+        return query
 
     def _update_kv_cache(
         self,
