@@ -229,7 +229,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         k_scale: float = 1.0,
         v_scale: float = 1.0,
     ) -> torch.Tensor:
-        """最简单的无条件分支版本。"""
+        """简化的KV cache更新，使用静态操作。"""
         
         # 提取映射信息
         kv_cache_starts = slot_mapping[0]  # [padded_num_slices]
@@ -245,48 +245,48 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         scaled_key = key * k_scale
         scaled_value = value * v_scale
         
-        # 直接从slot_mapping构建线性映射
-        # 假设slot_mapping已经是展开的形式，我们直接使用
+        # XLA兼容的实现 - 使用scatter操作
+        # 将cache重塑为2D以便scatter
+        cache_shape = kv_cache.shape
+        flat_cache = kv_cache.view(-1, cache_shape[-2], cache_shape[-1])  # [num_blocks * 2 * block_size, num_kv_heads, head_size]
         
-        # 简化处理：假设每个slice长度为1，直接映射
-        # 使用前total_tokens个slot mapping entries
-        num_updates = min(slice_lengths.shape[0], total_tokens)
+        # 计算平坦索引
+        # 对于每个kv_cache_starts[i]，我们需要更新：
+        # - K: flat_idx = (block_idx * 2 * block_size) + (0 * block_size) + offset_idx
+        # - V: flat_idx = (block_idx * 2 * block_size) + (1 * block_size) + offset_idx
         
-        # 创建有效的mask，只处理slice_length > 0的entries
-        valid_mask = slice_lengths[:num_updates] > 0
+        block_indices = kv_cache_starts // block_size
+        offset_indices = kv_cache_starts % block_size
         
-        # 获取有效的indices
-        valid_kv_starts = kv_cache_starts[:num_updates][valid_mask]
-        valid_new_starts = new_kv_starts[:num_updates][valid_mask]
+        # 计算K和V的平坦索引
+        k_flat_indices = block_indices * 2 * block_size + offset_indices
+        v_flat_indices = block_indices * 2 * block_size + block_size + offset_indices
         
-        # 确保索引在有效范围内
-        valid_new_starts = torch.clamp(valid_new_starts, 0, total_tokens - 1)
-        valid_kv_starts = torch.clamp(valid_kv_starts, 0, num_blocks * block_size - 1)
+        # 限制索引范围
+        max_flat_idx = flat_cache.shape[0] - 1
+        k_flat_indices = torch.clamp(k_flat_indices, 0, max_flat_idx)
+        v_flat_indices = torch.clamp(v_flat_indices, 0, max_flat_idx)
+        new_kv_indices = torch.clamp(new_kv_starts, 0, total_tokens - 1)
         
-        # 计算block和offset indices
-        block_indices = valid_kv_starts // block_size
-        offset_indices = valid_kv_starts % block_size
+        # 准备scatter的源数据
+        # 使用slice_lengths作为权重来混合新旧值
+        weights = (slice_lengths > 0).float().unsqueeze(-1).unsqueeze(-1)
         
-        # Clone并更新
-        updated_cache = kv_cache.clone()
+        # 获取当前值
+        current_k = flat_cache[k_flat_indices]
+        current_v = flat_cache[v_flat_indices]
         
-        # 批量更新KV cache - 无条件执行以避免动态分支
-        # 当valid_mask为空时，索引操作不会有任何效果
-        if block_indices.numel() > 0:
-            # 使用scatter操作来避免直接索引赋值
-            # 这样即使索引为空也不会出错
-            updated_cache.index_put_(
-                (block_indices, torch.tensor(0, device=kv_cache.device), offset_indices),
-                scaled_key[valid_new_starts],
-                accumulate=False
-            )
-            updated_cache.index_put_(
-                (block_indices, torch.tensor(1, device=kv_cache.device), offset_indices),
-                scaled_value[valid_new_starts],
-                accumulate=False
-            )
+        # 混合新旧值
+        new_k = current_k * (1 - weights) + scaled_key[new_kv_indices] * weights
+        new_v = current_v * (1 - weights) + scaled_value[new_kv_indices] * weights
         
-        return updated_cache
+        # 使用scatter更新
+        updated_flat_cache = flat_cache.clone()
+        updated_flat_cache.scatter_(0, k_flat_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, cache_shape[-2], cache_shape[-1]), new_k)
+        updated_flat_cache.scatter_(0, v_flat_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, cache_shape[-2], cache_shape[-1]), new_v)
+        
+        # 重塑回原始形状
+        return updated_flat_cache.view(cache_shape)
 
     def _compute_attention(
         self,
