@@ -313,7 +313,8 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Apply mask and clamp for safety
         max_cache_idx = cache_reshaped.shape[0] - 1
         safe_indices = torch.clamp(flat_indices, 0, max_cache_idx)
-        masked_indices = torch.where(valid_mask, safe_indices, 0)
+        # Use multiplication instead of torch.where to avoid dynamic branching
+        masked_indices = safe_indices * valid_mask.long()
         
         # Gather from cache
         gathered_kv = torch.index_select(cache_reshaped, 0, masked_indices.view(-1))
