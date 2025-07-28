@@ -1011,12 +1011,21 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                 end_index = self._prepare_inputs(scheduler_output, start_index)
             input_ids, inputs_embeds = self._get_model_inputs(
                 self.input_ids, mm_embeds)
+            
+            # Debug logging
+            logger.debug(f"input_ids: {input_ids}")
+            logger.debug(f"padded_num_reqs: {padded_num_reqs}, num_reqs: {num_reqs}, "
+                        f"total_num_scheduled_tokens: {scheduler_output.total_num_scheduled_tokens}")
+            logger.debug(f"position_ids: {self.position_ids}")
+            
             xm.mark_step()
             # Run the decoder
+            # Use the actual padded number of tokens for forward context
+            padded_total_num_scheduled_tokens = input_ids.shape[0]
             with set_forward_context(
                     attn_metadata,
                     self.vllm_config,
-                    num_tokens=scheduler_output.total_num_scheduled_tokens):
+                    num_tokens=padded_total_num_scheduled_tokens):
                 hidden_states = self.model(
                     input_ids=input_ids,
                     positions=self.position_ids,
