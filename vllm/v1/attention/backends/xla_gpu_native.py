@@ -185,30 +185,36 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             key_heads = key_heads.repeat_interleave(self.num_queries_per_kv, dim=1)
             value_heads = value_heads.repeat_interleave(self.num_queries_per_kv, dim=1)
         
-        # Transpose for batched matrix multiplication
-        # Shape: [total_tokens, num_heads, head_size] -> [total_tokens, num_heads, head_size]
-        key_heads_t = key_heads.transpose(-2, -1)  # [total_tokens, num_heads, head_size] -> [total_tokens, num_heads, head_size]
+        # Implement a simple causal self-attention
+        # This is a basic implementation that should work with XLA compilation
         
-        # Compute attention scores with a simple self-attention
-        # For now, we implement a basic version that works with XLA
-        # Shape: [total_tokens, num_heads, 1, head_size] @ [total_tokens, num_heads, head_size, 1]
-        # -> [total_tokens, num_heads, 1, 1]
-        query_for_scores = query_heads.unsqueeze(2)  # [total_tokens, num_heads, 1, head_size]
-        key_for_scores = key_heads.unsqueeze(3)      # [total_tokens, num_heads, head_size, 1]
+        # Create attention scores matrix
+        # [total_tokens, num_heads, head_size] -> [num_heads, total_tokens, head_size]
+        q_transposed = query_heads.transpose(0, 1)
+        k_transposed = key_heads.transpose(0, 1)
+        v_transposed = value_heads.transpose(0, 1)
         
-        # Simple dot product attention (self-attention on each token)
-        scores = torch.matmul(query_for_scores, key_for_scores).squeeze(-1).squeeze(-1) * self.scale
-        # Shape: [total_tokens, num_heads]
+        # Compute attention scores: [num_heads, total_tokens, total_tokens]
+        scores = torch.bmm(q_transposed, k_transposed.transpose(-2, -1)) * self.scale
         
-        # Apply softmax (simplified - each token attends only to itself for now)
-        # This avoids complex masking logic during compilation
-        attn_weights = torch.ones_like(scores)  # Simple identity attention
+        # Create a simple causal mask to prevent attending to future tokens
+        # Use a fixed-size mask to avoid dynamic shapes
+        max_seq_len = min(total_tokens, 256)  # Limit to reasonable size
+        if total_tokens <= max_seq_len:
+            # Create lower triangular mask
+            mask = torch.tril(torch.ones(total_tokens, total_tokens, device=query.device))
+            mask = mask.unsqueeze(0).expand(num_heads, -1, -1)
+            # Apply mask by setting masked positions to large negative value
+            scores = scores.masked_fill(mask == 0, -1e9)
         
-        # Apply attention weights to values
-        # For identity attention, output = value
-        output_heads = value_heads  # [total_tokens, num_heads, head_size]
+        # Apply softmax to get attention weights
+        attn_weights = torch.softmax(scores, dim=-1)
         
-        # Reshape back to original shape
+        # Apply attention to values: [num_heads, total_tokens, head_size]
+        output_heads = torch.bmm(attn_weights, v_transposed)
+        
+        # Transpose back and reshape: [total_tokens, num_heads, head_size]
+        output_heads = output_heads.transpose(0, 1)
         output = output_heads.reshape(total_tokens, num_heads * head_size)
         
         return output
