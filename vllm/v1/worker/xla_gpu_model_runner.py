@@ -1240,12 +1240,13 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
     @torch.no_grad()
     def _dummy_run(self, num_tokens: int, num_reqs: int,
                 num_blocks: int) -> None:
-        # 使用固定的、较大的尺寸来避免动态形状问题
-        # 但仍然标记为动态以支持真实运行时的变化
-        MAX_TOKENS = max(num_tokens, 32)  # 确保最小尺寸
-        MAX_REQS = max(num_reqs, 4)
-        MAX_BLOCKS = max(num_blocks, 8)
-        MAX_CONTEXT_LEN = 32  # 固定的上下文长度
+        # 使用传入的实际尺寸，而不是固定值
+        # 这样torch.compile可以看到不同的形状，从而推断为动态
+        MAX_TOKENS = num_tokens
+        MAX_REQS = num_reqs
+        MAX_BLOCKS = num_blocks
+        # 使用实际的上下文长度，而不是固定值
+        MAX_CONTEXT_LEN = min(self.max_model_len, num_tokens)
         
         if self.is_multimodal_model:
             input_ids = None
@@ -1418,10 +1419,27 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
     def _precompile_backbone(self) -> None:
         logger.info("Compiling the model with different input shapes.")
         start = time.perf_counter()
-        for num_tokens in self.num_tokens_paddings:
-            logger.info("  -- num_tokens: %d", num_tokens)
-            # Simplified for XLA GPU - use consistent parameters
-            self._dummy_run(num_tokens, self.max_num_reqs, self.max_num_blocks_per_req)
+        
+        # 为了让torch.compile识别动态形状，我们需要使用多种配置
+        # 不仅是num_tokens不同，其他维度也要有变化
+        token_configs = []
+        for i, num_tokens in enumerate(self.num_tokens_paddings):
+            # 使用不同的reqs和blocks数量来避免常量推断
+            num_reqs = min(self.max_num_reqs, max(1, num_tokens // 8))
+            num_blocks = min(self.max_num_blocks_per_req, max(1, num_tokens // self.block_size))
+            token_configs.append((num_tokens, num_reqs, num_blocks))
+            
+        # 至少编译两个不同的配置以确保动态形状
+        if len(token_configs) == 1:
+            # 添加一个稍微不同的配置
+            num_tokens, num_reqs, num_blocks = token_configs[0]
+            token_configs.append((num_tokens + 8, max(1, num_reqs - 1), num_blocks))
+            
+        for num_tokens, num_reqs, num_blocks in token_configs:
+            logger.info("  -- num_tokens: %d, num_reqs: %d, num_blocks: %d", 
+                       num_tokens, num_reqs, num_blocks)
+            self._dummy_run(num_tokens, num_reqs, num_blocks)
+            
         xm.wait_device_ops()
         end = time.perf_counter()
         logger.info("Compilation finished in %.2f [secs].", end - start)
