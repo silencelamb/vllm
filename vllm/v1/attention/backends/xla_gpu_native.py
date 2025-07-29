@@ -225,6 +225,13 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
     ) -> torch.Tensor:
         """Forward pass with XLA GPU paged attention using Triton kernel if available."""
         
+        # Validate input shapes
+        if query.numel() == 0 or key.numel() == 0 or value.numel() == 0:
+            # Empty inputs, return empty output
+            if output is not None:
+                return output
+            return query.new_zeros(query.shape[0], self.num_heads * self.head_size)
+            
         # Handle output scale
         if output_scale is not None:
             raise NotImplementedError(
@@ -530,8 +537,19 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if kv_cache.numel() == 0:
             return
         
-        # Get dimensions
-        num_tokens = key.shape[0]
+        # Early return if key/value have no tokens
+        if key.numel() == 0 or value.numel() == 0:
+            return
+            
+        # Get dimensions safely
+        key_shape = key.shape
+        if len(key_shape) < 3:
+            # Key doesn't have expected shape, skip update
+            return
+            
+        num_tokens = key_shape[0]
+        num_kv_heads = key_shape[1]
+        head_size = key_shape[2]
         block_size = attn_metadata.block_size
         slot_mapping = attn_metadata.slot_mapping[:num_tokens]
         
@@ -585,7 +603,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         masked_value = value * valid_mask
         
         # Expand indices for scatter
-        indices_expanded = flat_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, key.shape[1], key.shape[2])
+        indices_expanded = flat_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, num_kv_heads, head_size)
         
         # Use scatter to update the cache
         # This is XLA-friendly as it doesn't involve data-dependent control flow
@@ -606,10 +624,19 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if kv_cache.numel() == 0:
             return
         
-        # Get dimensions
-        num_tokens = key.shape[0]
-        num_kv_heads = key.shape[1]
-        head_size = key.shape[2]
+        # Early return if key/value have no tokens
+        if key.numel() == 0 or value.numel() == 0:
+            return
+            
+        # Get dimensions safely
+        key_shape = key.shape
+        if len(key_shape) < 3:
+            # Key doesn't have expected shape, skip update
+            return
+            
+        num_tokens = key_shape[0]
+        num_kv_heads = key_shape[1]
+        head_size = key_shape[2]
         block_size = attn_metadata.block_size
         
         # Apply scaling
