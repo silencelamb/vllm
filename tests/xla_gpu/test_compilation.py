@@ -75,6 +75,7 @@ def test_xla_gpu_compilation():
                 pipeline_parallel_size=1,
                 data_parallel_size=1,  # Force single data parallel to avoid multi-process issues
                 gpu_memory_utilization=0.8,
+                compilation_config= {"custom_ops": ["none"]},  # Disable custom ops for simplicity
                 trust_remote_code=True,  # If required by the model
             )
 
