@@ -1627,8 +1627,16 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             # Cache the dummy encoder outputs.
             self.encoder_cache["tmp"] = dict(enumerate(dummy_encoder_outputs))
 
-        # Trigger compilation for general shape - simplified for XLA GPU
-        self._dummy_run(num_tokens, self.max_num_reqs, self.max_num_blocks_per_req)
+        # Trigger compilation with multiple shapes to ensure dynamic inference
+        # Run with at least two different configurations
+        configs = [
+            (num_tokens, self.max_num_reqs, self.max_num_blocks_per_req),
+            # Add a slightly different configuration
+            (max(16, num_tokens // 2), max(1, self.max_num_reqs - 1), self.max_num_blocks_per_req)
+        ]
+        
+        for tokens, reqs, blocks in configs:
+            self._dummy_run(tokens, reqs, blocks)
 
         xm.mark_step()
         xm.wait_device_ops()
