@@ -317,7 +317,16 @@ def test_xla_gpu_compilation_simple():
             enforce_eager=False,
             tensor_parallel_size=1,
             data_parallel_size=1,
-            compilation_config= {"custom_ops": ["none"]},  # Disable custom ops for simplicity
+            compilation_config= {
+                "custom_ops": ["none"],  # Disable custom ops for simplicity
+                "use_torch_compile": True,
+                "backend": "openxla",
+                "torch_compile_options": {
+                    "backend": "openxla",
+                    "dynamic": True,  # Enable dynamic shapes
+                    "fullgraph": False,  # Allow graph breaks for dynamic shapes
+                }
+            },
         )
 
         # First generation - triggers prefill compilation
