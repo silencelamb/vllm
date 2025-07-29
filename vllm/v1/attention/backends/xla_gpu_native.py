@@ -437,7 +437,8 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         q = query.view(total_tokens, self.num_heads, self.head_size)
         
         # Try to use KV cache if available
-        if hasattr(attn_metadata, 'context_lens') and attn_metadata.context_lens.numel() > 0:
+        if (hasattr(attn_metadata, 'context_lens') and attn_metadata.context_lens.numel() > 0 
+            and kv_cache.numel() > 0 and len(kv_cache.shape) >= 5):
             # Reconstruct K/V from cache
             try:
                 # XLA-friendly: use tensor max directly without .item()
@@ -446,10 +447,16 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                     kv_cache, attn_metadata, max_context_len
                 )
                 # k_cache, v_cache shape: [total_tokens, max_context_len, num_kv_heads, head_size]
-                # Take the first token's K/V sequence as representative
-                # TODO: Handle batch properly
-                k = k_cache[0]  # [max_context_len, num_kv_heads, head_size]
-                v = v_cache[0]  # [max_context_len, num_kv_heads, head_size]
+                # Check if reconstruction was successful and has valid data
+                if k_cache.shape[0] > 0 and v_cache.shape[0] > 0:
+                    # Take the first token's K/V sequence as representative
+                    # TODO: Handle batch properly
+                    k = k_cache[0]  # [max_context_len, num_kv_heads, head_size]
+                    v = v_cache[0]  # [max_context_len, num_kv_heads, head_size]
+                else:
+                    # Empty reconstruction, use current tokens
+                    k = key.view(total_tokens, self.num_kv_heads, self.head_size)
+                    v = value.view(total_tokens, self.num_kv_heads, self.head_size)
             except Exception as e:
                 logger.debug(f"Failed to reconstruct from cache, using current tokens: {e}")
                 # Fallback to current tokens only
@@ -677,11 +684,34 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
 
     def _reconstruct_kv_sequences_with_len(
         self,
-        kv_cache: torch.Tensor,     # [num_blocks, 2, block_size, num_kv_heads, head_size]
+        kv_cache: torch.Tensor,     # [2, num_blocks, block_size, num_kv_heads, head_size]
         attn_metadata: XlaGpuPagedMetadata,
         context_len: Union[int, torch.Tensor],  # Can be int or tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Reconstruct K/V sequences with specified context length."""
+        
+        # Check if kv_cache is empty or invalid
+        if kv_cache.numel() == 0 or len(kv_cache.shape) < 5:
+            # Return empty tensors with the expected shape
+            total_tokens = attn_metadata.token_to_seq_mapping.shape[0]
+            # Use default values if cache is not properly initialized
+            num_kv_heads = self.num_kv_heads
+            head_size = self.head_size
+            # Handle context_len
+            if isinstance(context_len, torch.Tensor):
+                if hasattr(attn_metadata, 'attention_mask') and attn_metadata.attention_mask is not None:
+                    context_len_int = attn_metadata.attention_mask.shape[1]
+                else:
+                    context_len_int = 1  # Minimal context length
+            else:
+                context_len_int = int(context_len) if context_len > 0 else 1
+            
+            # Return zero tensors with correct shape
+            empty_k = torch.zeros(total_tokens, context_len_int, num_kv_heads, head_size, 
+                                device=kv_cache.device, dtype=kv_cache.dtype)
+            empty_v = torch.zeros(total_tokens, context_len_int, num_kv_heads, head_size, 
+                                device=kv_cache.device, dtype=kv_cache.dtype)
+            return empty_k, empty_v
         
         total_tokens = attn_metadata.token_to_seq_mapping.shape[0]
         block_size = attn_metadata.block_size
