@@ -1027,12 +1027,13 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                         f"total_num_scheduled_tokens: {scheduler_output.total_num_scheduled_tokens}")
             logger.debug(f"position_ids: {self.position_ids}")
             logger.debug(f"position_ids shape: {self.position_ids.shape}")
-            logger.debug(f"padded_total_num_scheduled_tokens: {padded_total_num_scheduled_tokens}")
+
             
             xm.mark_step()
             # Run the decoder
             # Use the actual padded number of tokens for forward context
             padded_total_num_scheduled_tokens = input_ids.shape[0]
+            logger.debug(f"padded_total_num_scheduled_tokens: {padded_total_num_scheduled_tokens}")
             
             # Ensure all inputs use consistent shapes
             position_ids_to_use = self.position_ids
