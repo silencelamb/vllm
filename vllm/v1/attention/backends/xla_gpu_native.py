@@ -509,7 +509,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         attn_metadata: XlaGpuPagedMetadata,
         layer: AttentionLayer,
     ) -> None:
-        """Optimized XLA-compatible KV cache update using vectorized operations."""
+        """XLA-compatible KV cache update using scatter operations."""
         
         # Get dimensions
         num_tokens = key.shape[0]
@@ -525,36 +525,39 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if isinstance(v_scale, torch.Tensor):
             value = value * v_scale
         
-        # Filter out invalid slots
-        valid_mask = slot_mapping >= 0
-        if not valid_mask.any():
-            return  # No valid slots to update
+        # Create a mask for valid slots (>= 0)
+        valid_mask = (slot_mapping >= 0).unsqueeze(-1).unsqueeze(-1)  # [num_tokens, 1, 1]
         
-        valid_slots = slot_mapping[valid_mask]
-        valid_keys = key[valid_mask]
-        valid_values = value[valid_mask]
+        # Use maximum to ensure we don't get negative indices
+        # Invalid slots will map to index 0
+        safe_slots = torch.maximum(slot_mapping, torch.zeros_like(slot_mapping))
         
         # Calculate block indices and offsets
-        block_indices = valid_slots // block_size
-        block_offsets = valid_slots % block_size
+        block_indices = safe_slots // block_size
+        block_offsets = safe_slots % block_size
         
-        # Flatten cache for easier indexing
+        # Reshape cache for easier indexing
         # [2, num_blocks, block_size, num_kv_heads, head_size] -> 
         # [2, num_blocks * block_size, num_kv_heads, head_size]
         cache_shape = kv_cache.shape
-        kv_cache_flat = kv_cache.view(2, cache_shape[1] * cache_shape[2], cache_shape[3], cache_shape[4])
+        num_slots = cache_shape[1] * cache_shape[2]
+        kv_cache_flat = kv_cache.view(2, num_slots, cache_shape[3], cache_shape[4])
         
         # Calculate flat indices
         flat_indices = block_indices * block_size + block_offsets
+        flat_indices = torch.clamp(flat_indices, 0, num_slots - 1)  # Safety clamp
         
-        # Vectorized update using scatter
-        # This is more XLA-friendly than loops
-        kv_cache_flat[0].index_copy_(0, flat_indices, valid_keys)
-        kv_cache_flat[1].index_copy_(0, flat_indices, valid_values)
+        # Mask the keys and values - invalid slots will have zero contribution
+        masked_key = key * valid_mask
+        masked_value = value * valid_mask
         
-        # Alternative: Use scatter_ for in-place update (may be more efficient)
-        # kv_cache_flat[0].scatter_(0, flat_indices.unsqueeze(-1).unsqueeze(-1).expand_as(valid_keys), valid_keys)
-        # kv_cache_flat[1].scatter_(0, flat_indices.unsqueeze(-1).unsqueeze(-1).expand_as(valid_values), valid_values)
+        # Expand indices for scatter
+        indices_expanded = flat_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, key.shape[1], key.shape[2])
+        
+        # Use scatter to update the cache
+        # This is XLA-friendly as it doesn't involve data-dependent control flow
+        kv_cache_flat[0].scatter_(0, indices_expanded, masked_key)
+        kv_cache_flat[1].scatter_(0, indices_expanded, masked_value)
     
     def _update_kv_cache_triton(
         self,
