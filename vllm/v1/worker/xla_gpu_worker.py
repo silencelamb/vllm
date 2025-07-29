@@ -150,9 +150,13 @@ class XlaGpuWorker:
         if self.model_config.seed is not None:
             xm.set_rng_state(self.model_config.seed, self.device)
 
-        # Increase Dynamo cache size limit
-        # XLA GPU typically needs larger cache to store compiled computation graphs
+        # Configure Dynamo for dynamic shapes support
+        # This must be done before any compilation happens
         torch._dynamo.config.cache_size_limit = 256  # Larger than TPU
+        torch._dynamo.config.capture_dynamic_output_shape_ops = True
+        torch._dynamo.config.assume_static_by_default = False
+        torch._dynamo.config.automatic_dynamic_shapes = True
+        torch._dynamo.config.specialize_int = False  # Don't specialize on integer values
         
         # Set up XLA persistent cache
         world_size = self.parallel_config.world_size

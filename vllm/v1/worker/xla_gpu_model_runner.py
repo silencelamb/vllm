@@ -1316,8 +1316,12 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             block_size=self.block_size,
         )
 
-        # 在forward之前配置dynamo
+        # 在forward之前配置dynamo以支持动态形状
         torch._dynamo.config.capture_dynamic_output_shape_ops = True
+        torch._dynamo.config.assume_static_by_default = False
+        torch._dynamo.config.automatic_dynamic_shapes = True
+        # 关闭形状专门化以避免常量推断
+        torch._dynamo.config.specialize_int = False
         
         # 只在创建metadata后标记动态维度
         if self.is_multimodal_model:
