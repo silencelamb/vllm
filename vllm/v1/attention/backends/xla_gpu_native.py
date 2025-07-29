@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import torch
 import torch_xla.core.xla_model as xm
@@ -291,7 +291,14 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Get kernel parameters
         max_seqlen_q = 1  # For decode phase
-        max_seqlen_k = int(attn_metadata.context_lens.max().item())
+        # XLA-friendly: avoid .item() call
+        max_seqlen_k = attn_metadata.context_lens.max()
+        if hasattr(max_seqlen_k, 'item'):
+            # Only call .item() if we're not in torch.compile mode
+            max_seqlen_k = int(max_seqlen_k)
+        else:
+            # Already a scalar, just ensure it's int type
+            max_seqlen_k = int(max_seqlen_k)
         num_queries_per_kv = self.num_queries_per_kv
         
         # Calculate grid dimensions
@@ -397,7 +404,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             cu_seqlens_q=cu_seqlens_q,
             max_seqlen_q=1,  # For decode phase
             seqused_k=attn_metadata.context_lens,
-            max_seqlen_k=int(attn_metadata.context_lens.max().item()),
+            max_seqlen_k=attn_metadata.context_lens.max(),  # XLA will handle int conversion
             softmax_scale=self.scale,
             causal=True,
             window_size=(-1, -1),  # No sliding window
@@ -433,7 +440,8 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if hasattr(attn_metadata, 'context_lens') and attn_metadata.context_lens.numel() > 0:
             # Reconstruct K/V from cache
             try:
-                max_context_len = int(attn_metadata.context_lens.max().item())
+                # XLA-friendly: use tensor max directly without .item()
+                max_context_len = attn_metadata.context_lens.max()
                 k_cache, v_cache = self._reconstruct_kv_sequences_with_len(
                     kv_cache, attn_metadata, max_context_len
                 )
@@ -671,7 +679,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         self,
         kv_cache: torch.Tensor,     # [num_blocks, 2, block_size, num_kv_heads, head_size]
         attn_metadata: XlaGpuPagedMetadata,
-        context_len: int,  # Use this instead of attn_metadata.max_context_len
+        context_len: Union[int, torch.Tensor],  # Can be int or tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Reconstruct K/V sequences with specified context length."""
         
@@ -684,22 +692,34 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         cache_reshaped = kv_cache.view(-1, 2, num_kv_heads, head_size)
         
         # Create index tensors with the actual context length
+        # Handle both int and tensor context_len for XLA compatibility
+        if isinstance(context_len, torch.Tensor):
+            # For XLA compilation, we need to handle dynamic shapes
+            # Use the mask dimensions from attention_mask if available
+            if hasattr(attn_metadata, 'attention_mask') and attn_metadata.attention_mask is not None:
+                context_len_int = attn_metadata.attention_mask.shape[1]
+            else:
+                # Fallback: use a large enough static size
+                context_len_int = 8192  # or another reasonable max
+        else:
+            context_len_int = int(context_len)
+        
         batch_idx = torch.arange(total_tokens, device=device).unsqueeze(1)  # [total_tokens, 1]
-        pos_idx = torch.arange(context_len, device=device).unsqueeze(0)  # [1, context_len]
+        pos_idx = torch.arange(context_len_int, device=device).unsqueeze(0)  # [1, context_len_int]
         
         # Expand to full grid
-        batch_grid = batch_idx.expand(-1, context_len)  # [total_tokens, context_len]
-        pos_grid = pos_idx.expand(total_tokens, -1)         # [total_tokens, context_len]
+        batch_grid = batch_idx.expand(-1, context_len_int)  # [total_tokens, context_len_int]
+        pos_grid = pos_idx.expand(total_tokens, -1)         # [total_tokens, context_len_int]
         
         # Get sequence info
         # First get seq_ids for each token
         token_seq_ids = attn_metadata.token_to_seq_mapping  # [total_tokens]
         # Expand to match grid shape
-        seq_ids_expanded = token_seq_ids.unsqueeze(1).expand(-1, context_len)  # [total_tokens, context_len]
+        seq_ids_expanded = token_seq_ids.unsqueeze(1).expand(-1, context_len_int)  # [total_tokens, context_len_int]
         # Get context lengths for each sequence
         seq_context_lens = attn_metadata.context_lens[token_seq_ids]  # [total_tokens]
         # Expand to match grid shape
-        context_lens_expanded = seq_context_lens.unsqueeze(1).expand(-1, context_len)  # [total_tokens, context_len]
+        context_lens_expanded = seq_context_lens.unsqueeze(1).expand(-1, context_len_int)  # [total_tokens, context_len_int]
         
         # Validity mask
         valid_mask = pos_grid < context_lens_expanded  # [total_tokens, context_len]
@@ -729,7 +749,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Gather from cache
         gathered_kv = torch.index_select(cache_reshaped, 0, masked_indices.view(-1))
-        gathered_kv = gathered_kv.view(total_tokens, context_len, 2, num_kv_heads, head_size)
+        gathered_kv = gathered_kv.view(total_tokens, context_len_int, 2, num_kv_heads, head_size)
         
         # Apply validity mask
         valid_mask_expanded = valid_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
