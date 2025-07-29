@@ -511,6 +511,10 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
     ) -> None:
         """XLA-compatible KV cache update using scatter operations."""
         
+        # Early return if cache is empty (initial state)
+        if kv_cache.numel() == 0:
+            return
+        
         # Get dimensions
         num_tokens = key.shape[0]
         block_size = attn_metadata.block_size
@@ -536,12 +540,26 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         block_indices = safe_slots // block_size
         block_offsets = safe_slots % block_size
         
-        # Reshape cache for easier indexing
-        # [2, num_blocks, block_size, num_kv_heads, head_size] -> 
-        # [2, num_blocks * block_size, num_kv_heads, head_size]
+        # Get cache shape and check dimensions
         cache_shape = kv_cache.shape
-        num_slots = cache_shape[1] * cache_shape[2]
-        kv_cache_flat = kv_cache.view(2, num_slots, cache_shape[3], cache_shape[4])
+        
+        # Handle different possible cache formats
+        if len(cache_shape) == 5:
+            # Expected format: [2, num_blocks, block_size, num_kv_heads, head_size]
+            num_slots = cache_shape[1] * cache_shape[2]
+            kv_cache_flat = kv_cache.view(2, num_slots, cache_shape[3], cache_shape[4])
+        elif len(cache_shape) == 4:
+            # Alternative format: [2, total_slots, num_kv_heads, head_size]
+            num_slots = cache_shape[1]
+            kv_cache_flat = kv_cache
+        else:
+            # Fallback: assume the cache is already flat
+            # Just do a simple reshape to ensure it's in the right format
+            total_elements = kv_cache[0].numel()
+            num_kv_heads = key.shape[1]
+            head_size = key.shape[2]
+            num_slots = total_elements // (num_kv_heads * head_size)
+            kv_cache_flat = kv_cache.view(2, num_slots, num_kv_heads, head_size)
         
         # Calculate flat indices
         flat_indices = block_indices * block_size + block_offsets
@@ -568,6 +586,10 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         layer: AttentionLayer,
     ) -> None:
         """KV cache update using Triton kernel for better performance."""
+        
+        # Early return if cache is empty (initial state)
+        if kv_cache.numel() == 0:
+            return
         
         # Get dimensions
         num_tokens = key.shape[0]
