@@ -172,7 +172,7 @@ class XlaGpuPagedMetadata:
 
 class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
     """XLA GPU PagedAttention implementation using pure tensor operations."""
-
+    accept_output_buffer: bool = True
     def __init__(
         self,
         num_heads: int,
