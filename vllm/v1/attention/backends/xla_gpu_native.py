@@ -254,33 +254,21 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Update KV cache first
         if self.kv_sharing_target_layer_name is None:
-            # Try Triton-based update if available
-            if TRITON_AVAILABLE:
-                try:
-                    self._update_kv_cache_triton(key, value, kv_cache, attn_metadata, layer)
-                except Exception as e:
-                    logger.debug(f"Triton KV cache update failed, using PyTorch: {e}")
-                    self._update_kv_cache_xla(key, value, kv_cache, attn_metadata, layer)
-            else:
-                self._update_kv_cache_xla(key, value, kv_cache, attn_metadata, layer)
+            # Always use XLA-compatible update in torch.compile mode
+            # Triton kernels have issues with torch.compile due to type checking
+            self._update_kv_cache_xla(key, value, kv_cache, attn_metadata, layer)
         
         # If Triton is available and we have proper metadata, use it
         if TRITON_AVAILABLE and hasattr(attn_metadata, 'block_tables') and hasattr(attn_metadata, 'context_lens'):
             try:
-                # Try XLA Triton integration first
-                return self._forward_triton(
+                # Skip XLA Triton integration in torch.compile mode and use direct Triton
+                # XLA Triton integration has issues with torch.compile due to isinstance checks
+                return self._forward_triton_direct(
                     query, key, value, kv_cache, attn_metadata, output, layer
                 )
             except Exception as e:
-                logger.warning(f"XLA Triton attention failed: {e}")
-                # Try direct Triton call as fallback
-                try:
-                    return self._forward_triton_direct(
-                        query, key, value, kv_cache, attn_metadata, output, layer
-                    )
-                except Exception as e2:
-                    logger.warning(f"Direct Triton attention also failed: {e2}")
-                    # Fall through to PyTorch implementation
+                logger.warning(f"Direct Triton attention failed: {e}")
+                # Fall through to PyTorch implementation
         
         # Fallback to PyTorch implementation
         return self._forward_pytorch(query, key, value, kv_cache, attn_metadata, output)
