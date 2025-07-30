@@ -231,18 +231,24 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 output = torch.ones_like(query)
             return output
             
-        # Validate input shapes
-        if query.numel() == 0 or key.numel() == 0 or value.numel() == 0:
-            # Empty inputs, return empty output
-            if output is not None:
-                return output
-            return query.new_zeros(query.shape[0], self.num_heads * self.head_size)
-            
+        # Since accept_output_buffer is True, output should be provided
+        assert output is not None, "Output tensor must be provided."
+        
         # Handle output scale
         if output_scale is not None:
             raise NotImplementedError(
                 "Fused output quantization is not yet supported for XLA GPU backend"
             )
+        
+        # Handle profiling run case
+        if attn_metadata is None:
+            # Profiling run.
+            return output
+        
+        # Validate input shapes
+        if query.numel() == 0 or key.numel() == 0 or value.numel() == 0:
+            # Empty inputs, return output as-is
+            return output
         
         # Update KV cache first
         if self.kv_sharing_target_layer_name is None:
