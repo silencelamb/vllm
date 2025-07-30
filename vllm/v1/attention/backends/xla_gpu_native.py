@@ -564,6 +564,8 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         k_scale = getattr(layer, '_k_scale', 1.0)
         v_scale = getattr(layer, '_v_scale', 1.0)
         
+        # Always apply scaling when it's a tensor to avoid data-dependent branches
+        # When scale is 1.0, multiplication is a no-op
         if isinstance(k_scale, torch.Tensor):
             key = key * k_scale
         if isinstance(v_scale, torch.Tensor):
@@ -650,9 +652,11 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         k_scale = getattr(layer, '_k_scale', 1.0)
         v_scale = getattr(layer, '_v_scale', 1.0)
         
-        if isinstance(k_scale, torch.Tensor) and k_scale != 1.0:
+        # Always apply scaling when it's a tensor to avoid data-dependent branches
+        # When scale is 1.0, multiplication is a no-op
+        if isinstance(k_scale, torch.Tensor):
             key = key * k_scale
-        if isinstance(v_scale, torch.Tensor) and v_scale != 1.0:
+        if isinstance(v_scale, torch.Tensor):
             value = value * v_scale
         
         # Flatten cache for Triton kernel
