@@ -88,6 +88,8 @@ if TRITON_AVAILABLE:
 class XlaGpuPagedAttentionBackend(AttentionBackend):
     """XLA GPU PagedAttention Backend using pure tensor operations."""
 
+    accept_output_buffer: bool = True
+
     @staticmethod
     def get_name() -> str:
         return "XLA_GPU_PAGED_V1"
@@ -172,7 +174,7 @@ class XlaGpuPagedMetadata:
 
 class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
     """XLA GPU PagedAttention implementation using pure tensor operations."""
-    accept_output_buffer: bool = True
+
     def __init__(
         self,
         num_heads: int,
