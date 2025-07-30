@@ -1246,7 +1246,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         MAX_REQS = num_reqs
         MAX_BLOCKS = num_blocks
         # 使用实际的上下文长度，而不是固定值
-        MAX_CONTEXT_LEN = min(self.max_model_len, num_tokens)
+        MAX_CONTEXT_LEN = num_tokens
         
         if self.is_multimodal_model:
             input_ids = None
@@ -1296,7 +1296,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         
         # 使用固定尺寸的attention mask
         attention_mask = torch.zeros(
-            (MAX_TOKENS, MAX_CONTEXT_LEN),
+            (MAX_TOKENS, num_tokens),
             dtype=torch.float32, device=self.device
         )
         # 创建简单的causal mask
