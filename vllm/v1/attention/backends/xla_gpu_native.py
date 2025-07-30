@@ -289,14 +289,13 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         output: torch.Tensor,
         layer: AttentionLayer,
     ) -> torch.Tensor:
-        """Forward pass using Triton unified attention kernel with XLA integration.
+        """Forward pass using Triton unified attention kernel.
         
-        For torch.compile with openxla backend, we need to handle the Triton kernel
-        invocation carefully to avoid isinstance checks during compilation.
+        In torch.compile mode with openxla backend, we use the Triton kernel directly
+        rather than going through xla_triton.triton_call to avoid isinstance checks.
         """
-        
-        # For now, use the direct Triton call which is more compatible with torch.compile
-        # The XLA Triton integration needs special handling for torch.compile + openxla
+        # For torch.compile compatibility, use direct Triton kernel invocation
+        # The openxla backend will handle the Triton kernel compilation
         return self._forward_triton_direct(
             query, key, value, kv_cache, attn_metadata, output, layer
         )
