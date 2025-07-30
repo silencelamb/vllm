@@ -225,6 +225,12 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
     ) -> torch.Tensor:
         """Forward pass with XLA GPU paged attention using Triton kernel if available."""
         
+        # For determine_available_memory case.
+        if kv_cache.numel() == 0:
+            if output is None:
+                output = torch.ones_like(query)
+            return output
+            
         # Validate input shapes
         if query.numel() == 0 or key.numel() == 0 or value.numel() == 0:
             # Empty inputs, return empty output
@@ -290,22 +296,15 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Prepare inputs for Triton kernel
         q = query.view(total_tokens, self.num_heads, self.head_size)
-        key_cache, value_cache = kv_cache.unbind(0)
+        key_cache = kv_cache[0, ...]
+        value_cache = kv_cache[1, ...]
         
         # Prepare cu_seqlens_q (cumulative sequence lengths)
         cu_seqlens_q = torch.zeros(batch_size + 1, dtype=torch.int32, device=query.device)
         cu_seqlens_q[1:] = torch.arange(1, batch_size + 1, device=query.device)
         
         # Get kernel parameters
-        max_seqlen_q = 1  # For decode phase
-        # XLA-friendly: avoid .item() call
-        max_seqlen_k = attn_metadata.context_lens.max()
-        if hasattr(max_seqlen_k, 'item'):
-            # Only call .item() if we're not in torch.compile mode
-            max_seqlen_k = int(max_seqlen_k)
-        else:
-            # Already a scalar, just ensure it's int type
-            max_seqlen_k = int(max_seqlen_k)
+
         num_queries_per_kv = self.num_queries_per_kv
         
         # Calculate grid dimensions

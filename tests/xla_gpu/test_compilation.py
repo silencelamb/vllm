@@ -95,7 +95,7 @@ def test_xla_gpu_compilation():
 
             # Use local model path to avoid network download
             # Replace with your actual local model path
-            model_path = "Qwen/Qwen2.5-3B-Instruct"  # Please replace with actual path
+            model_path = "Qwen/Qwen3-0.6B"  # Please replace with actual path
             
             llm = LLM(
                 model=model_path,
