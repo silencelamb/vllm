@@ -258,23 +258,9 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             # TODO: Enable Triton KV cache update once XLA triton compilation is fixed
             self._update_kv_cache_xla(key, value, kv_cache, attn_metadata, layer)
         
-        # If Triton is available and we have proper metadata, use it
-        if TRITON_AVAILABLE and hasattr(attn_metadata, 'block_tables') and hasattr(attn_metadata, 'context_lens'):
-            try:
-                # Try XLA Triton integration which should work with openxla backend
-                return self._forward_triton_xla(
-                    query, key, value, kv_cache, attn_metadata, output, layer
-                )
-            except Exception as e:
-                logger.warning(f"XLA Triton attention failed: {e}")
-                # Try direct Triton call as fallback
-                try:
-                    return self._forward_triton_direct(
-                        query, key, value, kv_cache, attn_metadata, output, layer
-                    )
-                except Exception as e2:
-                    logger.warning(f"Direct Triton attention also failed: {e2}")
-                    # Fall through to PyTorch implementation
+        # Currently, XLA Triton integration has issues with torch.compile
+        # Fall back to PyTorch implementation which is XLA-compatible
+        # TODO: Enable Triton support once XLA Triton supports torch.compile
         
         # Fallback to PyTorch implementation
         return self._forward_pytorch(query, key, value, kv_cache, attn_metadata, output)
@@ -289,16 +275,16 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         output: torch.Tensor,
         layer: AttentionLayer,
     ) -> torch.Tensor:
-        """Forward pass using Triton unified attention kernel.
+        """Forward pass using Triton unified attention kernel with XLA integration.
         
-        In torch.compile mode with openxla backend, we use the Triton kernel directly
-        rather than going through xla_triton.triton_call to avoid isinstance checks.
+        This is currently not compatible with torch.compile due to isinstance checks
+        in xla_triton.triton_call. Fall back to PyTorch implementation for now.
         """
-        # For torch.compile compatibility, use direct Triton kernel invocation
-        # The openxla backend will handle the Triton kernel compilation
-        return self._forward_triton_direct(
-            query, key, value, kv_cache, attn_metadata, output, layer
-        )
+        # TODO: Fix XLA Triton integration for torch.compile compatibility
+        # The issue is that xla_triton.triton_call performs isinstance(fn, triton.JITFunction)
+        # which fails when fn is wrapped as TritonKernelVariable during torch.compile
+        logger.debug("XLA Triton integration not yet compatible with torch.compile, using PyTorch fallback")
+        return self._forward_pytorch(query, key, value, kv_cache, attn_metadata, output)
     
     def _forward_triton_direct(
         self,
