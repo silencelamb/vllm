@@ -1329,8 +1329,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         else:
             torch._dynamo.mark_dynamic(input_ids, 0)
         torch._dynamo.mark_dynamic(position_ids, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 1)
-        torch._dynamo.mark_dynamic(attn_metadata.block_tables, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.block_tables, (0, 1))
         torch._dynamo.mark_dynamic(attn_metadata.context_lens, 0)
         torch._dynamo.mark_dynamic(attn_metadata.token_to_seq_mapping, 0)
         torch._dynamo.mark_dynamic(attn_metadata.attention_mask, 0)
