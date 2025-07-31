@@ -477,7 +477,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # For now, just skip the KV cache update to isolate the issue
         # TODO: Implement a proper XLA-friendly KV cache update
-        logger.debug(f"KV cache update called with num_tokens={num_tokens}")
+        # logger.debug(f"KV cache update called with num_tokens={num_tokens}")
         
         # Temporary workaround: return without updating
         # This will help us determine if the error is from KV cache update or elsewhere

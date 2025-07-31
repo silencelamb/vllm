@@ -267,7 +267,7 @@ def test_xla_gpu_compilation_simple():
     os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
     
     # 添加XLA调试信息
-    os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump"
+    # os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump"
     os.environ["XLA_HLO_DEBUG"] = "1"
     
     os.environ["HF_HUB_OFFLINE"] = "1"
