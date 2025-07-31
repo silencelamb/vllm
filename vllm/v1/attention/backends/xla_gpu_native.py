@@ -424,13 +424,15 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Reshape output back
         # [1, num_heads, total_tokens, head_size] -> [total_tokens, num_heads, head_size]
         attn_output = attn_output.squeeze(0).transpose(0, 1).contiguous()
-        # [total_tokens, num_heads, head_size] -> [total_tokens, num_heads * head_size]
-        result = attn_output.view(total_tokens, self.num_heads * self.head_size)
         
         if output is not None:
-            output.copy_(result)
+            # output is expected to be [total_tokens, num_heads, head_size]
+            output.copy_(attn_output)
             return output
-        return result
+        else:
+            # When no output buffer provided, return in flat format
+            # [total_tokens, num_heads, head_size] -> [total_tokens, num_heads * head_size]
+            return attn_output.view(total_tokens, self.num_heads * self.head_size)
 
     def _update_kv_cache_xla(
         self,
