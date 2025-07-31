@@ -442,9 +442,13 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         attn_metadata: XlaGpuPagedMetadata,
         layer: AttentionLayer,
     ) -> None:
-        """XLA-compatible KV cache update using scatter operations."""
+        """XLA-compatible KV cache update using simple operations.
         
-        # Early return if cache is empty (initial state)
+        This implementation prioritizes XLA graph capture compatibility over performance.
+        We avoid complex indexing operations that might cause shape inference issues.
+        """
+        
+        # Early return if cache is empty
         if kv_cache.numel() == 0:
             return
         
@@ -452,60 +456,45 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if key.numel() == 0 or value.numel() == 0:
             return
             
-        # Get dimensions safely
-        key_shape = key.shape
-        if len(key_shape) < 3:
-            # Key doesn't have expected shape, skip update
-            return
-            
-        num_tokens = key_shape[0]
-        num_kv_heads = key_shape[1]
-        head_size = key_shape[2]
+        num_tokens = key.shape[0]
+        num_kv_heads = key.shape[1]
+        head_size = key.shape[2]
         block_size = attn_metadata.block_size
-        slot_mapping = attn_metadata.slot_mapping[:num_tokens]
         
         # Apply scaling if available
         k_scale = getattr(layer, '_k_scale', 1.0)
         v_scale = getattr(layer, '_v_scale', 1.0)
-        
-        # Always apply scaling when it's a tensor to avoid data-dependent branches
-        # When scale is 1.0, multiplication is a no-op
         if isinstance(k_scale, torch.Tensor):
             key = key * k_scale
         if isinstance(v_scale, torch.Tensor):
             value = value * v_scale
         
-        # Create a mask for valid slots (>= 0)
-        valid_mask = (slot_mapping >= 0).unsqueeze(-1).unsqueeze(-1)  # [num_tokens, 1, 1]
+        # Get slot mapping
+        slot_mapping = attn_metadata.slot_mapping[:num_tokens]
         
-        # Use maximum to ensure we don't get negative indices
-        # Invalid slots will map to index 0
-        safe_slots = torch.maximum(slot_mapping, torch.zeros_like(slot_mapping))
+        # For XLA compatibility, we'll update the cache without data-dependent control flow
+        # This is less efficient but ensures proper graph capture
         
-        # Calculate block indices and offsets
-        block_indices = safe_slots // block_size
-        block_offsets = safe_slots % block_size
+        # Step 1: Create valid mask (slots >= 0)
+        valid_mask = (slot_mapping >= 0).float()  # [num_tokens]
         
-        # Reshape cache for easier indexing
-        cache_shape = kv_cache.shape
-        if len(cache_shape) == 5:
-            # [2, num_blocks, block_size, num_kv_heads, head_size]
-            kv_cache_flat = kv_cache.view(2, -1, num_kv_heads, head_size)
-        else:
-            # Already in flat format
-            kv_cache_flat = kv_cache
+        # Step 2: Compute safe indices (replace -1 with 0)
+        safe_slots = torch.where(slot_mapping >= 0, slot_mapping, torch.zeros_like(slot_mapping))
         
-        # Calculate flat indices
-        flat_indices = block_indices * block_size + block_offsets
+        # Step 3: Compute block indices and offsets
+        block_indices = safe_slots // block_size  # [num_tokens]
+        block_offsets = safe_slots % block_size   # [num_tokens]
         
-        # Clamp indices to valid range
-        max_slots = kv_cache_flat.shape[1]
-        flat_indices = torch.clamp(flat_indices, 0, max_slots - 1)
-        
-        # Update cache using advanced indexing
-        # This is more XLA-friendly than scatter
-        kv_cache_flat[0, flat_indices, :, :] = key * valid_mask
-        kv_cache_flat[1, flat_indices, :, :] = value * valid_mask
+        # Step 4: Update cache for each token using loop unrolling
+        # XLA should be able to handle this pattern
+        for i in range(num_tokens):
+            block_idx = block_indices[i]
+            block_offset = block_offsets[i]
+            mask = valid_mask[i].unsqueeze(-1).unsqueeze(-1)  # [1, 1]
+            
+            # Update with masking (invalid slots write zeros)
+            kv_cache[0, block_idx, block_offset] = key[i] * mask
+            kv_cache[1, block_idx, block_offset] = value[i] * mask
     
     def _update_kv_cache_triton(
         self,
