@@ -484,42 +484,26 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         block_indices = safe_slots // block_size
         block_offsets = safe_slots % block_size
         
-        # Get cache shape and check dimensions
+        # Reshape cache for easier indexing
         cache_shape = kv_cache.shape
-        
-        # Handle different possible cache formats
         if len(cache_shape) == 5:
-            # Expected format: [2, num_blocks, block_size, num_kv_heads, head_size]
-            num_slots = cache_shape[1] * cache_shape[2]
-            kv_cache_flat = kv_cache.view(2, num_slots, cache_shape[3], cache_shape[4])
-        elif len(cache_shape) == 4:
-            # Alternative format: [2, total_slots, num_kv_heads, head_size]
-            num_slots = cache_shape[1]
-            kv_cache_flat = kv_cache
+            # [2, num_blocks, block_size, num_kv_heads, head_size]
+            kv_cache_flat = kv_cache.view(2, -1, num_kv_heads, head_size)
         else:
-            # Fallback: assume the cache is already flat
-            # Just do a simple reshape to ensure it's in the right format
-            total_elements = kv_cache[0].numel()
-            num_kv_heads = key.shape[1]
-            head_size = key.shape[2]
-            num_slots = total_elements // (num_kv_heads * head_size)
-            kv_cache_flat = kv_cache.view(2, num_slots, num_kv_heads, head_size)
+            # Already in flat format
+            kv_cache_flat = kv_cache
         
         # Calculate flat indices
         flat_indices = block_indices * block_size + block_offsets
-        flat_indices = torch.clamp(flat_indices, 0, num_slots - 1)  # Safety clamp
         
-        # Mask the keys and values - invalid slots will have zero contribution
-        masked_key = key * valid_mask
-        masked_value = value * valid_mask
+        # Clamp indices to valid range
+        max_slots = kv_cache_flat.shape[1]
+        flat_indices = torch.clamp(flat_indices, 0, max_slots - 1)
         
-        # Expand indices for scatter
-        indices_expanded = flat_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, num_kv_heads, head_size)
-        
-        # Use scatter to update the cache
-        # This is XLA-friendly as it doesn't involve data-dependent control flow
-        kv_cache_flat[0].scatter_(0, indices_expanded, masked_key)
-        kv_cache_flat[1].scatter_(0, indices_expanded, masked_value)
+        # Update cache using advanced indexing
+        # This is more XLA-friendly than scatter
+        kv_cache_flat[0, flat_indices, :, :] = key * valid_mask
+        kv_cache_flat[1, flat_indices, :, :] = value * valid_mask
     
     def _update_kv_cache_triton(
         self,
