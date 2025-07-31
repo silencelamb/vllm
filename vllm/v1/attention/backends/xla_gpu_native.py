@@ -472,29 +472,16 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Get slot mapping
         slot_mapping = attn_metadata.slot_mapping[:num_tokens]
         
-        # For XLA compatibility, we'll update the cache without data-dependent control flow
-        # This is less efficient but ensures proper graph capture
+        # Simple KV cache update for XLA compatibility
+        # We prioritize correctness and graph capture over performance
         
-        # Step 1: Create valid mask (slots >= 0)
-        valid_mask = (slot_mapping >= 0).float()  # [num_tokens]
+        # For now, just skip the KV cache update to isolate the issue
+        # TODO: Implement a proper XLA-friendly KV cache update
+        logger.debug(f"KV cache update called with num_tokens={num_tokens}")
         
-        # Step 2: Compute safe indices (replace -1 with 0)
-        safe_slots = torch.where(slot_mapping >= 0, slot_mapping, torch.zeros_like(slot_mapping))
-        
-        # Step 3: Compute block indices and offsets
-        block_indices = safe_slots // block_size  # [num_tokens]
-        block_offsets = safe_slots % block_size   # [num_tokens]
-        
-        # Step 4: Update cache for each token using loop unrolling
-        # XLA should be able to handle this pattern
-        for i in range(num_tokens):
-            block_idx = block_indices[i]
-            block_offset = block_offsets[i]
-            mask = valid_mask[i].unsqueeze(-1).unsqueeze(-1)  # [1, 1]
-            
-            # Update with masking (invalid slots write zeros)
-            kv_cache[0, block_idx, block_offset] = key[i] * mask
-            kv_cache[1, block_idx, block_offset] = value[i] * mask
+        # Temporary workaround: return without updating
+        # This will help us determine if the error is from KV cache update or elsewhere
+        return
     
     def _update_kv_cache_triton(
         self,
