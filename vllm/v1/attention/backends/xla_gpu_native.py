@@ -472,16 +472,60 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Get slot mapping
         slot_mapping = attn_metadata.slot_mapping[:num_tokens]
         
-        # Simple KV cache update for XLA compatibility
-        # We prioritize correctness and graph capture over performance
+        # XLA-friendly KV cache update using simple tensor operations
+        # This avoids complex indexing that can cause shape inference issues
         
-        # For now, just skip the KV cache update to isolate the issue
-        # TODO: Implement a proper XLA-friendly KV cache update
-        # logger.debug(f"KV cache update called with num_tokens={num_tokens}")
+        # Create masks for valid slots (>= 0)
+        valid_mask = slot_mapping >= 0  # [num_tokens]
         
-        # Temporary workaround: return without updating
-        # This will help us determine if the error is from KV cache update or elsewhere
-        return
+        # Replace invalid slots with 0 to avoid indexing errors
+        safe_slots = torch.where(valid_mask, slot_mapping, torch.zeros_like(slot_mapping))
+        
+        # Calculate block positions
+        block_indices = safe_slots // block_size
+        block_offsets = safe_slots % block_size
+        
+        # Flatten the cache for easier indexing
+        # kv_cache shape: [2, num_blocks, block_size, num_kv_heads, head_size]
+        cache_shape = kv_cache.shape
+        num_blocks = cache_shape[1]
+        kv_cache_flat = kv_cache.view(2, num_blocks * block_size, num_kv_heads, head_size)
+        
+        # Calculate flat indices
+        flat_indices = block_indices * block_size + block_offsets
+        
+        # Create expanded mask for broadcasting
+        valid_mask_expanded = valid_mask.unsqueeze(-1).unsqueeze(-1)  # [num_tokens, 1, 1]
+        
+        # Apply mask to keys and values
+        masked_key = key * valid_mask_expanded.float()
+        masked_value = value * valid_mask_expanded.float()
+        
+        # Update cache using index_select and masked assignment
+        # This approach avoids loops and is more XLA-friendly
+        
+        # First, create a tensor of all possible indices
+        all_indices = torch.arange(kv_cache_flat.shape[1], device=key.device)
+        
+        # For each position in flat_indices, we want to update the corresponding cache slot
+        # We'll use a different approach: create a full-size update tensor and use masking
+        
+        # Create update tensors initialized with existing cache values
+        key_updates = kv_cache_flat[0].clone()
+        value_updates = kv_cache_flat[1].clone()
+        
+        # Update only the positions specified by flat_indices
+        # Use advanced indexing with bounds checking
+        max_idx = kv_cache_flat.shape[1] - 1
+        safe_indices = torch.clamp(flat_indices, 0, max_idx)
+        
+        # Scatter the masked values into the update tensors
+        key_updates[safe_indices] = masked_key
+        value_updates[safe_indices] = masked_value
+        
+        # Copy back to cache
+        kv_cache_flat[0] = key_updates
+        kv_cache_flat[1] = value_updates
     
     def _update_kv_cache_triton(
         self,
