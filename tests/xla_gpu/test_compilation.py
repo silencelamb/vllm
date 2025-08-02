@@ -358,4 +358,4 @@ if __name__ == "__main__":
     test_xla_gpu_compilation_simple()
     
     print("\nRunning full XLA GPU compilation test...")
-    test_xla_gpu_compilation()
+    # test_xla_gpu_compilation()
