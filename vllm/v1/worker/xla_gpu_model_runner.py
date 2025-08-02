@@ -681,20 +681,40 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         seq_lens = self.seq_lens_cpu[:self.max_num_reqs].to(self.device)
         block_tables = block_tables.to(self.device)
 
-        # Calculate the slot mapping
-        slot_mapping_metadata = self._get_slot_mapping_metadata(
-            num_reqs, num_scheduled_tokens_per_req)
-        num_kv_update_slices = slot_mapping_metadata.shape[0]
-        padded_num_slices = _get_padded_num_kv_cache_update_slices(
-            padded_total_num_scheduled_tokens, self.max_num_reqs,
-            self.block_size)
-        slot_mapping_metadata = np.pad(
-            slot_mapping_metadata,
-            [[0, padded_num_slices - len(slot_mapping_metadata)], [0, 0]],
-            constant_values=0)
-        slot_mapping_metadata = np.transpose(slot_mapping_metadata)
-        slot_mapping_metadata = torch.tensor(slot_mapping_metadata,
-                                             device=self.device)
+        # Calculate the slot mapping for XLA GPU
+        # XLA GPU uses a simple 1D slot mapping instead of the complex 3D mapping used by TPU
+        slot_mapping = torch.zeros(padded_total_num_scheduled_tokens,
+                                  dtype=torch.int32, device=self.device)
+        
+        # Fill in slot indices for scheduled tokens
+        token_idx = 0
+        for req_idx in range(num_reqs):
+            req_id = self.input_batch.req_ids[req_idx]
+            req_state = self.requests[req_id]
+            block_table = self.input_batch.block_table_cpu[req_idx]
+            num_computed = req_state.num_computed_tokens
+            num_scheduled = num_scheduled_tokens_per_req[req_idx]
+            
+            # Calculate slot indices for this request's tokens
+            for i in range(num_scheduled):
+                token_pos = num_computed + i
+                block_idx = token_pos // self.block_size
+                block_offset = token_pos % self.block_size
+                
+                if block_idx < len(block_table):
+                    physical_block = block_table[block_idx]
+                    if physical_block >= 0:
+                        slot_idx = physical_block * self.block_size + block_offset
+                        slot_mapping[token_idx] = slot_idx
+                    else:
+                        slot_mapping[token_idx] = -1
+                else:
+                    slot_mapping[token_idx] = -1
+                
+                token_idx += 1
+        
+        # Fill padding tokens with -1 (invalid)
+        slot_mapping[total_num_scheduled_tokens:] = -1
 
         if self.lora_config is not None:
             # We need to respect padding when activating LoRA adapters
@@ -781,8 +801,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # Padding tokens are marked as decode (False)
         is_prefill_token[total_num_scheduled_tokens:] = False
 
-        # Debug slot_mapping shape
-        logger.debug(f"slot_mapping_metadata shape: {slot_mapping_metadata.shape}")
+        # Debug shapes
+        logger.debug(f"slot_mapping shape: {slot_mapping.shape}")
         logger.debug(f"block_tables shape: {block_tables.shape}")
         logger.debug(f"seq_lens shape: {seq_lens.shape}")
         logger.debug(f"token_to_seq_mapping shape: {token_to_seq_mapping.shape}")
@@ -792,7 +812,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # Create XlaGpuPagedMetadata with all required fields
         attn_metadata = XlaGpuPagedMetadata(
             # Original fields
-            slot_mapping=slot_mapping_metadata,
+            slot_mapping=slot_mapping,
             block_tables=block_tables,
             context_lens=seq_lens,
             
@@ -1266,7 +1286,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             MAX_TOKENS, MAX_REQS, self.block_size)
         num_kv_update_slices = torch.tensor([padded_num_slices],
                                             dtype=torch.int32).to(self.device)
-        slot_mapping = torch.zeros((3, padded_num_slices),
+        # XLA GPU uses 1D slot mapping, not 3D like TPU
+        slot_mapping = torch.zeros(MAX_TOKENS,
                                 dtype=torch.int32).to(self.device)
         block_tables = torch.zeros((MAX_REQS, MAX_BLOCKS),
                                 dtype=torch.int32).to(self.device)
