@@ -750,35 +750,48 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # 2. Calculate max_context_len
         max_context_len = seq_lens.max().item() if len(seq_lens) > 0 else 0
 
-        # 3. More precise attention_mask calculation
-        if max_context_len > 0:
-            attention_mask = torch.zeros(
-                (padded_total_num_scheduled_tokens, max_context_len),
+        # 3. Attention mask calculation supporting chunked-prefill
+        # For XLA GPU, we need consistent shapes between compile and runtime
+        # Create a square mask to handle all tokens in the batch
+        if padded_total_num_scheduled_tokens > 0:
+            # Start with a full mask of -inf
+            attention_mask = torch.full(
+                (padded_total_num_scheduled_tokens, padded_total_num_scheduled_tokens),
+                float('-inf'),
                 dtype=torch.float32, device=self.device
             )
             
-            token_idx = 0
+            # Build attention mask more efficiently
+            # First, create a mapping of token positions for each request
+            token_start_idx = 0
             for req_idx in range(num_reqs):
-                req_seq_len = seq_lens[req_idx].item()
                 req_num_tokens = num_scheduled_tokens_per_req[req_idx]
                 req_computed_tokens = self.input_batch.num_computed_tokens_cpu[req_idx]
                 
-                for token_pos in range(req_num_tokens):
-                    current_pos_in_seq = req_computed_tokens + token_pos
+                # Create causal mask for tokens within the same request
+                for i in range(req_num_tokens):
+                    query_idx = token_start_idx + i
+                    query_abs_pos = req_computed_tokens + i
                     
-                    # This token can attend to all positions before it (including itself) in the sequence
-                    attention_mask[token_idx, :current_pos_in_seq + 1] = 0.0
-                    # For positions after it, set to -inf (cannot attend)
-                    attention_mask[token_idx, current_pos_in_seq + 1:] = float('-inf')
-                    
-                    token_idx += 1
+                    # This query token can attend to all tokens in the same request
+                    # up to and including its absolute position
+                    for j in range(req_num_tokens):
+                        key_idx = token_start_idx + j
+                        key_abs_pos = req_computed_tokens + j
+                        
+                        if key_abs_pos <= query_abs_pos:
+                            attention_mask[query_idx, key_idx] = 0.0
+                
+                token_start_idx += req_num_tokens
             
-            # Fill padding tokens with safe values (cannot attend to anything)
-            attention_mask[total_num_scheduled_tokens:, :] = float('-inf')
+            # Padding tokens already have -inf (cannot attend to anything)
         else:
-            attention_mask = torch.zeros((padded_total_num_scheduled_tokens, 1),
-                                        dtype=torch.float32, device=self.device)
-            attention_mask[total_num_scheduled_tokens:, :] = float('-inf')
+            # For XLA GPU, use square attention mask for consistency
+            attention_mask = torch.full(
+                (padded_total_num_scheduled_tokens, padded_total_num_scheduled_tokens),
+                float('-inf'),
+                dtype=torch.float32, device=self.device
+            )
 
         # 4. Calculate is_prefill_token
         # Determine which tokens are prefill (first-time processing) vs decode (generation)
@@ -1319,13 +1332,17 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         
         # 使用固定尺寸的attention mask
         # 使用模型的dtype以避免类型不匹配
+        # Create square attention mask for XLA consistency
         attention_mask = torch.zeros(
-            (MAX_TOKENS, num_tokens),
+            (MAX_TOKENS, MAX_TOKENS),
             dtype=self.dtype, device=self.device
         )
-        # 创建简单的causal mask
-        attention_mask[:, 0] = 0.0  # 可以attend到第一个位置
-        attention_mask[:, 1:] = float('-inf')  # 不能attend到其他位置
+        # 创建简单的causal mask for the first num_tokens
+        for i in range(num_tokens):
+            attention_mask[i, :i+1] = 0.0  # Can attend to previous positions and self
+            attention_mask[i, i+1:] = float('-inf')  # Cannot attend to future positions
+        # Padding tokens cannot attend to anything
+        attention_mask[num_tokens:, :] = float('-inf')
         
         is_prefill_token = torch.ones(MAX_TOKENS, dtype=torch.bool, device=self.device)
         
