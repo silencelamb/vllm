@@ -1,0 +1,228 @@
+WARNING 08-02 12:03:43 [xla_gpu.py:159] Pin memory is not supported on XLA GPU.
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1978] Using exponential token paddings:
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1980]     16
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1980]     32
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1980]     64
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1980]     128
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1944] Preparing request paddings:
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1951]     8
+DEBUG 08-02 12:03:43 [config.py:4875] enabled custom ops: Counter()
+DEBUG 08-02 12:03:43 [config.py:4877] disabled custom ops: Counter()
+INFO 08-02 12:03:43 [xla_gpu_model_runner.py:1261] Loading model from scratch...
+INFO 08-02 12:03:44 [xla_gpu.py:50] Using XlaGpuPagedAttentionBackend.
+DEBUG 08-02 12:03:44 [config.py:4875] enabled custom ops: Counter()
+DEBUG 08-02 12:03:44 [config.py:4877] disabled custom ops: Counter({'rms_norm': 113, 'silu_and_mul': 28, 'rotary_embedding': 1})
+INFO 08-02 12:03:44 [weight_utils.py:296] Using model weights format ['*.safetensors', '*.bin', '*.pt']
+INFO 08-02 12:03:44 [weight_utils.py:347] No model.safetensors.index.json found in local cache.
+Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  2.91it/s]
+Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  2.91it/s]
+
+INFO 08-02 12:03:44 [default_loader.py:272] Loading weights took 0.36 seconds
+2025-08-02 12:03:44.877444: W torch_xla/csrc/xla_graph_executor.cpp:105] Using persistent compilation cache with XLA_HLO_DEBUG=1 or XLA_IR_DEBUG=1 is not recommended. Changes to the HLO metadata will not be reflected in loaded executables.
+DEBUG 08-02 12:03:45 [decorators.py:204] Start compiling function <code object forward at 0x7560457135d0, file "/code/github_code/xla_vllm/vllm/vllm/model_executor/models/qwen2.py", line 337>
+DEBUG 08-02 12:03:53 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+DEBUG 08-02 12:04:03 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+INFO 08-02 12:04:11 [xla_gpu_model_runner.py:1800] Clear dynamo cache and cached dynamo bytecode.
+INFO 08-02 12:04:11 [xla_gpu_worker.py:221] XLA GPU memory info: total=60864MB, used=1146MB
+INFO 08-02 12:04:11 [xla_gpu_worker.py:246] XLA GPU memory: Total=60864MB, Model=1720.0MB, KV Cache=7409.0MB
+INFO 08-02 12:04:11 [kv_cache_utils.py:716] GPU KV cache size: 67,728 tokens
+INFO 08-02 12:04:11 [kv_cache_utils.py:720] Maximum concurrency for 128 tokens per request: 529.12x
+DEBUG 08-02 12:04:13 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+DEBUG 08-02 12:04:13 [config.py:4875] enabled custom ops: Counter()
+DEBUG 08-02 12:04:13 [config.py:4877] disabled custom ops: Counter({'rms_norm': 113, 'silu_and_mul': 28, 'rotary_embedding': 1})
+INFO 08-02 12:04:13 [xla_gpu_model_runner.py:1481] Compiling the model with different input shapes.
+INFO 08-02 12:04:13 [xla_gpu_model_runner.py:1500]   -- num_tokens: 16, num_reqs: 2, num_blocks: 1
+DEBUG 08-02 12:04:13 [decorators.py:204] Start compiling function <code object forward at 0x7560457135d0, file "/code/github_code/xla_vllm/vllm/vllm/model_executor/models/qwen2.py", line 337>
+DEBUG 08-02 12:04:23 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+DEBUG 08-02 12:04:33 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+DEBUG 08-02 12:04:43 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+DEBUG 08-02 12:04:53 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+DEBUG 08-02 12:05:03 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+INFO 08-02 12:05:12 [xla_gpu_model_runner.py:1500]   -- num_tokens: 32, num_reqs: 4, num_blocks: 2
+DEBUG 08-02 12:05:13 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+INFO 08-02 12:05:16 [xla_gpu_model_runner.py:1500]   -- num_tokens: 64, num_reqs: 8, num_blocks: 4
+INFO 08-02 12:05:19 [xla_gpu_model_runner.py:1500]   -- num_tokens: 128, num_reqs: 8, num_blocks: 8
+DEBUG 08-02 12:05:23 [utils.py:485] Waiting for 1 local, 0 remote core engine proc(s) to start.
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1506] Compilation finished in 70.23 [secs].
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1512] Compiling select_hidden_states with different input shapes.
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1527]   -- num_tokens: 16, num_seqs: 8
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1527]   -- num_tokens: 32, num_seqs: 8
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1527]   -- num_tokens: 64, num_seqs: 8
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1527]   -- num_tokens: 128, num_seqs: 8
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1535] Compilation finished in 0.09 [secs].
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1539] Compiling compute_logits with different input shapes.
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1548]   -- num_seqs: 8
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1551] Compilation finished in 0.07 [secs].
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1555] Compiling structured_decoding with different input shapes.
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1572]   -- num_seqs: 8
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1575] Compilation finished in 0.39 [secs].
+INFO 08-02 12:05:23 [xla_gpu_model_runner.py:1579] Compiling sample_from_logits with different input shapes.
+INFO 08-02 12:05:24 [xla_gpu_model_runner.py:1603]   -- num_seqs: 8
+INFO 08-02 12:05:24 [xla_gpu_model_runner.py:1606] Compilation finished in 0.26 [secs].
+INFO 08-02 12:05:24 [xla_gpu_model_runner.py:1610] Compiling gather_logprobs with different input shapes.
+INFO 08-02 12:05:24 [xla_gpu_model_runner.py:1621]   -- num_seqs: 8
+INFO 08-02 12:05:24 [xla_gpu_model_runner.py:1624] Compilation finished in 0.09 [secs].
+INFO 08-02 12:05:24 [core.py:172] init engine (profile, create kv cache, warmup model) took 99.30 seconds
+DEBUG 08-02 12:05:24 [utils.py:555] READY from local core engine process 0.
+INFO 08-02 12:05:24 [xla_gpu.py:107] [XLA GPU] Forcing DYNAMO_ONCE compilation level
+DEBUG 08-02 12:05:24 [core.py:614] EngineCore waiting for work.
+DEBUG 08-02 12:05:24 [core.py:614] EngineCore waiting for work.
+Adding requests: 100%|███████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 143.80it/s]
+DEBUG 08-02 12:05:24 [core.py:620] EngineCore loop active.
+Processed prompts:   0%|                                      | 0/1 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1075] input_ids: tensor([9707,   11, 1246,  525,  498,   30,    0,    0,    0,    0,    0,    0,
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1075]            0,    0,    0,    0], device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 6
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1079] position_ids: tensor([0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], device='xla:0',
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1079]        dtype=torch.int32)
+DEBUG 08-02 12:05:24 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+2025-08-02 12:05:24.875393: I external/xla/xla/service/dump.cc:554] HloModule dump enabled with path prefix: , suffix: before_optimizations
+DEBUG 08-02 12:05:25 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075] input_ids: tensor([90767,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]             0,     0,     0,     0,     0,     0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079] position_ids: tensor([6, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075] input_ids: tensor([97671,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]             0,     0,     0,     0,     0,     0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079] position_ids: tensor([7, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075] input_ids: tensor([95967,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]             0,     0,     0,     0,     0,     0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079] position_ids: tensor([8, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075] input_ids: tensor([40271,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]             0,     0,     0,     0,     0,     0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079] position_ids: tensor([9, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], device='xla:0',
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079]        dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075] input_ids: tensor([137002,      0,      0,      0,      0,      0,      0,      0,      0,
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]              0,      0,      0,      0,      0,      0,      0],
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1075]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079] position_ids: tensor([10,  1,  2,  3,  4,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1079]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:38 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075] input_ids: tensor([138168,      0,      0,      0,      0,      0,      0,      0,      0,
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075]              0,      0,      0,      0,      0,      0,      0],
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079] position_ids: tensor([11,  1,  2,  3,  4,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075] input_ids: tensor([58417,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075]             0,     0,     0,     0,     0,     0], device='xla:0',
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075]        dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079] position_ids: tensor([12,  1,  2,  3,  4,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075] input_ids: tensor([8767,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075]            0,    0,    0,    0], device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079] position_ids: tensor([13,  1,  2,  3,  4,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:820] slot_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:821] block_tables shape: torch.Size([8, 8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:822] seq_lens shape: torch.Size([8])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:823] token_to_seq_mapping shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:824] attention_mask shape: torch.Size([16, 16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:825] is_prefill_token shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075] input_ids: tensor([8731,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1075]            0,    0,    0,    0], device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1076] input_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1077] padded_num_reqs: 8, num_reqs: 1, total_num_scheduled_tokens: 1
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079] position_ids: tensor([14,  1,  2,  3,  4,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1079]        device='xla:0', dtype=torch.int32)
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1080] position_ids shape: torch.Size([16])
+DEBUG 08-02 12:05:39 [xla_gpu_model_runner.py:1087] padded_total_num_scheduled_tokens: 16
+DEBUG 08-02 12:05:39 [core.py:614] EngineCore waiting for work.
+Processed prompts: 100%|██████████████████████████████| 1/1 [00:14<00:00, 14.43s/it, est. speed input: 0.42 toks/s, output: 0.69 toks/s]
+First generation successful
+Prompt: 'Hello, how are you?', Generated text: 'oreticalatisationconditionally "<?อนา określonlectualotholved)){\n'
+
+XLA GPU simple compilation test passed ✓
+DEBUG 08-02 12:05:39 [core.py:582] EngineCore exiting.
+[rank0]:[W802 12:05:41.188667765 ProcessGroupNCCL.cpp:1476] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())

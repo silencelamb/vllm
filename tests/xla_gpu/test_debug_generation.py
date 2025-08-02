@@ -1,8 +1,6 @@
 """Debug XLA GPU generation issues with minimal test case"""
 
 import os
-import torch
-import torch_xla.core.xla_model as xm
 
 # Set up environment
 os.environ["VLLM_USE_XLA_GPU"] = "1"
@@ -19,6 +17,9 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 # Enable XLA debugging
 os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump"
 os.environ["XLA_HLO_DEBUG"] = "1"
+
+import torch
+import torch_xla.core.xla_model as xm
 
 def test_minimal_generation():
     """Test with a single prompt to isolate the issue"""

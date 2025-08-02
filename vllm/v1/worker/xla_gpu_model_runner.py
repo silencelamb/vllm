@@ -840,6 +840,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         )
         
         # Add debug logging
+        import os
         debug_enabled = os.environ.get("VLLM_XLA_DEBUG", "0") == "1"
         if debug_enabled:
             logger.info("=== XLA GPU Debug Info ===")
