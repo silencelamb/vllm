@@ -1263,7 +1263,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                                 dtype=torch.int32).to(self.device)
         
         padded_num_slices = _get_padded_num_kv_cache_update_slices(
-            MAX_TOKENS, self.max_num_reqs, self.block_size)
+            MAX_TOKENS, MAX_REQS, self.block_size)
         num_kv_update_slices = torch.tensor([padded_num_slices],
                                             dtype=torch.int32).to(self.device)
         slot_mapping = torch.zeros((3, padded_num_slices),
@@ -1295,9 +1295,10 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             token_to_seq_mapping[start_idx:end_idx] = seq_idx
         
         # 使用固定尺寸的attention mask
+        # 使用模型的dtype以避免类型不匹配
         attention_mask = torch.zeros(
             (MAX_TOKENS, num_tokens),
-            dtype=torch.float32, device=self.device
+            dtype=self.dtype, device=self.device
         )
         # 创建简单的causal mask
         attention_mask[:, 0] = 0.0  # 可以attend到第一个位置

@@ -106,7 +106,7 @@ def test_xla_gpu_compilation():
                 tensor_parallel_size=1,
                 pipeline_parallel_size=1,
                 data_parallel_size=1,  # Force single data parallel to avoid multi-process issues
-                gpu_memory_utilization=0.8,
+                gpu_memory_utilization=0.6,
                 compilation_config={"custom_ops": ["none"]},  # Disable custom ops - required for XLA GPU to avoid Dynamo errors
                 trust_remote_code=True,  # If required by the model
             )
@@ -310,13 +310,14 @@ def test_xla_gpu_compilation_simple():
     try:
         # Use local model
         llm = LLM(
-            model="Qwen/Qwen3-0.6B",  # Please replace  #  "Qwen/Qwen2-1.5B-Instruct"
+            model="Qwen/Qwen3-0.6B",  # 0.6B model should not require excessive memory
             max_num_batched_tokens=128,
             max_model_len=128,
             max_num_seqs=4,
             enforce_eager=False,
             tensor_parallel_size=1,
             data_parallel_size=1,
+            gpu_memory_utilization=0.6,
             compilation_config= {
                 "custom_ops": ["none"],  # Disable custom ops for simplicity
                 "use_torch_compile": True,
