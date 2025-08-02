@@ -181,9 +181,13 @@ def paged_attention_xla(
     query_start_loc, num_seqs, scale, sliding_window=None, soft_cap=None
 ):
     """XLA implementation that will use the CUDA kernel."""
-    # On XLA device, this will dispatch to CUDA implementation
-    # and appear as custom-call in HLO
-    return torch.ops.xla_gpu_final.paged_attention(
+    # For XLA device, we need to either:
+    # 1. Call a different implementation, or
+    # 2. Use the CUDA implementation if XLA can dispatch to CUDA
+    
+    # Since XLA GPU uses CUDA underneath, we can call the CUDA implementation directly
+    # This avoids recursion and ensures the CUDA kernel is used
+    return paged_attention_cuda(
         query, kv_cache, context_lens, block_tables,
         query_start_loc, num_seqs, scale, sliding_window, soft_cap
     )
