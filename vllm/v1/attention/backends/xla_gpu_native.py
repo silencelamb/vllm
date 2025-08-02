@@ -12,7 +12,7 @@ from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
 from vllm.attention.backends.utils import CommonAttentionState
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
-from vllm.v1.attention.backends.xla_gpu_paged_attention import xla_gpu_paged_attention
+from vllm.v1.attention.backends.xla_gpu_paged_attention_final import xla_gpu_paged_attention_final as xla_gpu_paged_attention
 
 logger = init_logger(__name__)
 
