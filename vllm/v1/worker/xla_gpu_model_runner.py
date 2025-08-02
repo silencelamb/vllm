@@ -691,7 +691,9 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         for req_idx in range(num_reqs):
             req_id = self.input_batch.req_ids[req_idx]
             req_state = self.requests[req_id]
-            block_table = self.input_batch.block_table_cpu[req_idx]
+            # For MultiGroupBlockTable, we need to access the first group (index 0)
+            # Then get the numpy array for the specific request
+            block_table = self.input_batch.block_table[0].block_table_np[req_idx]
             num_computed = req_state.num_computed_tokens
             num_scheduled = num_scheduled_tokens_per_req[req_idx]
             
