@@ -352,34 +352,34 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Reshape query for current tokens
         q = query.view(total_tokens, self.num_heads, self.head_size)
         
-        # Try to use KV cache if available
-        if (hasattr(attn_metadata, 'context_lens') and attn_metadata.context_lens.numel() > 0 
+        # Determine if this is prefill or decode phase
+        # XLA-friendly: avoid .item() calls
+        is_decode = total_tokens == 1
+        
+        # Try to use KV cache if available for decode phase
+        if (is_decode and hasattr(attn_metadata, 'context_lens') 
+            and attn_metadata.context_lens.numel() > 0 
             and kv_cache.numel() > 0 and len(kv_cache.shape) >= 5):
-            # Reconstruct K/V from cache
+            # Decode phase: reconstruct full K/V from cache
             try:
-                # XLA-friendly: use tensor max directly without .item()
-                max_context_len = attn_metadata.context_lens.max()
-                k_cache, v_cache = self._reconstruct_kv_sequences_with_len(
-                    kv_cache, attn_metadata, max_context_len
+                # Get the context length for the first (and only) request in decode
+                context_len = attn_metadata.context_lens[0]
+                
+                # Reconstruct full K/V sequences from cache
+                k_cache, v_cache = self._reconstruct_kv_for_decode(
+                    kv_cache, attn_metadata, context_len
                 )
-                # k_cache, v_cache shape: [total_tokens, max_context_len, num_kv_heads, head_size]
-                # Check if reconstruction was successful and has valid data
-                if k_cache.shape[0] > 0 and v_cache.shape[0] > 0:
-                    # Take the first token's K/V sequence as representative
-                    # TODO: Handle batch properly
-                    k = k_cache[0]  # [max_context_len, num_kv_heads, head_size]
-                    v = v_cache[0]  # [max_context_len, num_kv_heads, head_size]
-                else:
-                    # Empty reconstruction, use current tokens
-                    k = key.view(total_tokens, self.num_kv_heads, self.head_size)
-                    v = value.view(total_tokens, self.num_kv_heads, self.head_size)
+                # k_cache, v_cache shape: [context_len, num_kv_heads, head_size]
+                
+                k = k_cache
+                v = v_cache
             except Exception as e:
                 logger.debug(f"Failed to reconstruct from cache, using current tokens: {e}")
                 # Fallback to current tokens only
                 k = key.view(total_tokens, self.num_kv_heads, self.head_size)
                 v = value.view(total_tokens, self.num_kv_heads, self.head_size)
         else:
-            # No cache available, use current tokens
+            # Prefill phase or no cache: use current tokens
             k = key.view(total_tokens, self.num_kv_heads, self.head_size)
             v = value.view(total_tokens, self.num_kv_heads, self.head_size)
         
@@ -391,23 +391,31 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Prepare for F.scaled_dot_product_attention
         # Expected shape: [batch_size, num_heads, seq_len, head_size]
         # We need to add batch dimension and transpose
-        q = q.unsqueeze(0).transpose(1, 2)  # [1, num_heads, total_tokens, head_size]
-        k = k.unsqueeze(0).transpose(1, 2)  # [1, num_heads, total_tokens, head_size]
-        v = v.unsqueeze(0).transpose(1, 2)  # [1, num_heads, total_tokens, head_size]
+        q = q.unsqueeze(0).transpose(1, 2)  # [1, num_heads, q_len, head_size]
+        k = k.unsqueeze(0).transpose(1, 2)  # [1, num_heads, k_len, head_size]
+        v = v.unsqueeze(0).transpose(1, 2)  # [1, num_heads, k_len, head_size]
         
         # Prepare attention mask if available
         attn_mask = None
         if hasattr(attn_metadata, 'attention_mask') and attn_metadata.attention_mask is not None:
-            # Shape: [total_tokens, max_context_len]
-            mask = attn_metadata.attention_mask
-            
-            # For SDPA, we need mask in shape [batch_size, num_heads, q_len, k_len]
-            # or [batch_size, 1, q_len, k_len] for broadcasting
-            if total_tokens <= mask.shape[1]:
+            if is_decode:
+                # Decode phase: create mask for attending to all previous tokens
+                # q has shape [1, num_heads, 1, head_size] (single query)
+                # k has shape [1, num_heads, context_len, head_size]
+                context_len = k.shape[2]
+                # Create a mask that allows the query to attend to all keys
+                # Shape: [1, 1, 1, context_len] - all zeros (no masking)
+                attn_mask = torch.zeros(1, 1, 1, context_len, device=q.device, dtype=q.dtype)
+            else:
+                # Prefill phase: use the provided causal mask
+                mask = attn_metadata.attention_mask
                 # Extract the relevant portion of the mask
-                attn_mask = mask[:total_tokens, :total_tokens]
-                # Add batch and head dimensions
-                attn_mask = attn_mask.unsqueeze(0).unsqueeze(0)  # [1, 1, total_tokens, total_tokens]
+                q_len = q.shape[2]
+                k_len = k.shape[2]
+                if q_len <= mask.shape[0] and k_len <= mask.shape[1]:
+                    attn_mask = mask[:q_len, :k_len]
+                    # Add batch and head dimensions
+                    attn_mask = attn_mask.unsqueeze(0).unsqueeze(0)  # [1, 1, q_len, k_len]
         
         # Use F.scaled_dot_product_attention
         # This is more efficient and XLA-friendly
@@ -659,6 +667,65 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             empty_v = torch.zeros(total_tokens, context_len_int, num_kv_heads, head_size, 
                                 device=kv_cache.device, dtype=kv_cache.dtype)
             return empty_k, empty_v
+    
+    def _reconstruct_kv_for_decode(
+        self,
+        kv_cache: torch.Tensor,  # [2, num_blocks, block_size, num_kv_heads, head_size]
+        attn_metadata: XlaGpuPagedMetadata,
+        context_len: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Reconstruct K/V sequences for decode phase using XLA-friendly operations."""
+        
+        # Get dimensions
+        _, num_blocks, block_size, num_kv_heads, head_size = kv_cache.shape
+        device = kv_cache.device
+        dtype = kv_cache.dtype
+        
+        # For decode, we only have one request
+        # Get the block table for the first request
+        block_table = attn_metadata.block_tables[0]  # [max_blocks_per_seq]
+        
+        # Calculate how many blocks we need based on context length
+        # XLA-friendly: use torch operations instead of .item()
+        num_blocks_needed = (context_len + block_size - 1) // block_size
+        num_blocks_needed = torch.clamp(num_blocks_needed, max=block_table.shape[0])
+        
+        # Create output tensors
+        # Use context_len as max size, will mask later
+        max_len = torch.clamp(context_len, min=1, max=8192)  # Reasonable max for XLA
+        k_output = torch.zeros(max_len, num_kv_heads, head_size, device=device, dtype=dtype)
+        v_output = torch.zeros(max_len, num_kv_heads, head_size, device=device, dtype=dtype)
+        
+        # Extract K and V caches
+        k_cache = kv_cache[0]  # [num_blocks, block_size, num_kv_heads, head_size]
+        v_cache = kv_cache[1]  # [num_blocks, block_size, num_kv_heads, head_size]
+        
+        # For XLA efficiency, we'll process all blocks at once using advanced indexing
+        # Create indices for all positions
+        all_positions = torch.arange(max_len, device=device)
+        block_indices = all_positions // block_size
+        block_offsets = all_positions % block_size
+        
+        # Mask for valid positions (within context_len)
+        valid_mask = all_positions < context_len
+        
+        # Get physical block numbers for each position
+        # Clamp block indices to valid range
+        block_indices_clamped = torch.clamp(block_indices, max=num_blocks_needed - 1)
+        physical_blocks = block_table[block_indices_clamped]
+        
+        # Gather K and V values from cache
+        # Use index_select for XLA compatibility
+        gathered_k = k_cache[physical_blocks, block_offsets]  # [max_len, num_kv_heads, head_size]
+        gathered_v = v_cache[physical_blocks, block_offsets]  # [max_len, num_kv_heads, head_size]
+        
+        # Apply mask
+        valid_mask_expanded = valid_mask.unsqueeze(-1).unsqueeze(-1)
+        k_output = torch.where(valid_mask_expanded, gathered_k, k_output)
+        v_output = torch.where(valid_mask_expanded, gathered_v, v_output)
+        
+        # Return only the valid portion
+        return k_output[:context_len], v_output[:context_len]
         
         total_tokens = attn_metadata.token_to_seq_mapping.shape[0]
         block_size = attn_metadata.block_size

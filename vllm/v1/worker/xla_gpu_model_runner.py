@@ -665,6 +665,9 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # Zero out to avoid spurious values from prev iteration (last cp chunk)
         self.input_ids_cpu[
             total_num_scheduled_tokens:padded_total_num_scheduled_tokens] = 0
+        self.positions_cpu[
+            total_num_scheduled_tokens:padded_total_num_scheduled_tokens] = 0
+        
         self.input_ids = self.input_ids_cpu[:
                                             padded_total_num_scheduled_tokens].to(
                                                 self.device)
