@@ -36,6 +36,7 @@ def get_cuda_module():
     
     # CUDA kernel source
     cuda_source = """
+    #include <torch/extension.h>
     #include <cuda_runtime.h>
     #include <cuda_fp16.h>
     
@@ -70,33 +71,20 @@ def get_cuda_module():
             output[idx] += kv_cache[0] * scalar_t(0.0001);
         }
     }
-    """
     
-    # C++ wrapper
-    cpp_source = """
-    #include <torch/extension.h>
-    #include <cuda_runtime.h>
-    
-    torch::Tensor paged_attention_cuda(
+    // Launch function that can be called from C++
+    void launch_paged_attention(
+        torch::Tensor output,
         torch::Tensor query,
         torch::Tensor kv_cache,
         torch::Tensor context_lens,
         torch::Tensor block_tables,
-        torch::Tensor query_start_loc,
-        torch::Tensor num_seqs,
         float scale
     ) {
-        // Check inputs
-        TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
-        TORCH_CHECK(kv_cache.is_cuda(), "kv_cache must be a CUDA tensor");
-        
         const int num_tokens = query.size(0);
         const int num_heads = query.size(1);
         const int head_size = query.size(2);
         
-        auto output = torch::empty_like(query);
-        
-        // Launch kernel
         dim3 blocks(num_tokens, num_heads, 1);
         dim3 threads(std::min(head_size, 1024));
         
@@ -113,6 +101,42 @@ def get_cuda_module():
                 head_size
             );
         });
+    }
+    """
+    
+    # C++ wrapper
+    cpp_source = """
+    #include <torch/extension.h>
+    
+    // Forward declaration of the launch function that will be defined in CUDA source
+    void launch_paged_attention(
+        torch::Tensor output,
+        torch::Tensor query,
+        torch::Tensor kv_cache,
+        torch::Tensor context_lens,
+        torch::Tensor block_tables,
+        float scale
+    );
+    
+    torch::Tensor paged_attention_cuda(
+        torch::Tensor query,
+        torch::Tensor kv_cache,
+        torch::Tensor context_lens,
+        torch::Tensor block_tables,
+        torch::Tensor query_start_loc,
+        torch::Tensor num_seqs,
+        float scale
+    ) {
+        // Check inputs
+        TORCH_CHECK(query.is_cuda(), "query must be a CUDA tensor");
+        TORCH_CHECK(kv_cache.is_cuda(), "kv_cache must be a CUDA tensor");
+        
+        auto output = torch::empty_like(query);
+        
+        // Call the launch function (defined in CUDA source)
+        launch_paged_attention(
+            output, query, kv_cache, context_lens, block_tables, scale
+        );
         
         return output;
     }
