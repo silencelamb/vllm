@@ -28,8 +28,7 @@ def paged_attention_xla(
     query_start_loc, num_seqs, scale
 ):
     """XLA implementation that creates a true custom-call."""
-    import torch_xla._XLAC as xlac
-    
+    import torch_xla
     # Use XLA's FFI (Foreign Function Interface) to create custom call
     # This is the most direct way to create a custom-call in HLO
     
@@ -46,8 +45,8 @@ def paged_attention_xla(
         args = [query, kv_cache, context_lens, block_tables]
         
         # Use _xla_custom_call if available
-        if hasattr(xlac, '_xla_custom_call'):
-            outputs = xlac._xla_custom_call(
+        if hasattr(torch_xla._XLAC, '_xla_custom_call'):
+            outputs = torch_xla._XLAC._xla_custom_call(
                 args,
                 output_dtypes=[str(query.dtype).replace('torch.', '')],
                 output_shapes=[list(query.shape)],

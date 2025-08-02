@@ -3,7 +3,6 @@
 import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
-import torch_xla._XLAC as xlac
 import os
 
 
@@ -25,7 +24,7 @@ def test_true_custom_call():
     print("\n1. Testing direct _xla_custom_call...")
     try:
         # This should create a custom-call in HLO
-        outputs = xlac._xla_custom_call(
+        outputs = torch_xla._XLAC._xla_custom_call(
             [query, kv_cache],
             output_dtypes=['float32'],
             output_shapes=[[4, 8, 64]],
@@ -40,7 +39,7 @@ def test_true_custom_call():
         print("✅ Direct custom call created")
         
         # Get HLO
-        hlo_text = xlac._get_xla_tensors_text([output1])
+        hlo_text = torch_xla._XLAC._get_xla_tensors_text([output1])
         if "custom-call" in hlo_text.lower() and "MyCustomPagedAttention" in hlo_text:
             print("✅ SUCCESS: Custom call 'MyCustomPagedAttention' found in HLO!")
         else:
@@ -67,7 +66,7 @@ def test_true_custom_call():
     xm.wait_device_ops()
     
     # Get HLO
-    hlo_text2 = xlac._get_xla_tensors_text([output2])
+    hlo_text2 = torch_xla._XLAC._get_xla_tensors_text([output2])
     print("\nHLO Graph (first 1000 chars):")
     print(hlo_text2[:1000])
     
@@ -94,7 +93,7 @@ def test_minimal_custom_call():
     
     try:
         # Simplest possible custom call
-        result = xlac._xla_custom_call(
+        result = torch_xla._XLAC._xla_custom_call(
             [x],
             output_dtypes=['float32'],
             output_shapes=[[3]],
@@ -107,7 +106,7 @@ def test_minimal_custom_call():
         print("✅ Minimal custom call created successfully")
         
         # Check HLO
-        hlo = xlac._get_xla_tensors_text([result])
+        hlo = torch_xla._XLAC._get_xla_tensors_text([result])
         if "custom-call" in hlo.lower():
             print("✅ Custom-call found in HLO!")
             for line in hlo.split('\n'):
