@@ -839,6 +839,21 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             block_size=self.block_size,
         )
         
+        # Add debug logging
+        debug_enabled = os.environ.get("VLLM_XLA_DEBUG", "0") == "1"
+        if debug_enabled:
+            logger.info("=== XLA GPU Debug Info ===")
+            logger.info(f"Num requests: {num_reqs}")
+            logger.info(f"Total scheduled tokens: {total_num_scheduled_tokens}")
+            logger.info(f"Padded scheduled tokens: {padded_total_num_scheduled_tokens}")
+            logger.info(f"Num scheduled tokens per req: {num_scheduled_tokens_per_req}")
+            logger.info(f"Num computed tokens per req: {list(self.input_batch.num_computed_tokens_cpu[:num_reqs])}")
+            logger.info(f"Attention mask shape: {attention_mask.shape}")
+            logger.info(f"Slot mapping shape: {slot_mapping.shape}")
+            logger.info(f"Block tables shape: {block_tables.shape}")
+            logger.info(f"Is prefill: {is_prefill}")
+            logger.info(f"First 10 slot mappings: {slot_mapping[:10].tolist()}")
+        
         # NOTE(woosuk): Due to chunked prefills, there can be at most 1 partial
         # request in the batch. While we should not sample any token from this
         # partial request, we do so for simplicity. We will ignore the sampled
