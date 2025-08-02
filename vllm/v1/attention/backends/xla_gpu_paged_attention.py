@@ -2,23 +2,72 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 import torch
-import torch_xla.core.xla_builder as xb
-import torch_xla.experimental.custom_kernel  # noqa: F401
-# Required to register custom ops.
-from torch.library import impl
-from torch_xla._internal.jax_workarounds import requires_jax
-from torch_xla.experimental.custom_kernel import XLA_LIB
+from torch.library import Library, impl
 
+# Create a custom library for XLA GPU ops
+xla_gpu_lib = Library("xla_gpu", "DEF")
 
-# Define the custom op for XLA GPU paged attention
-XLA_LIB.define(
-    "xla_gpu_paged_attention(Tensor query, Tensor kv_cache, "
+# Define the custom op signature
+xla_gpu_lib.define(
+    "paged_attention(Tensor query, Tensor kv_cache, "
     "Tensor context_lens, Tensor block_tables, Tensor query_start_loc, "
     "Tensor num_seqs, float scale, int? sliding_window, float? soft_cap) -> Tensor"
 )
 
 
-@impl(XLA_LIB, "xla_gpu_paged_attention", "XLA")
+@impl(xla_gpu_lib, "paged_attention", "CUDA")
+def xla_gpu_paged_attention_cuda(
+    query: torch.Tensor,
+    kv_cache: torch.Tensor,
+    context_lens: torch.Tensor,
+    block_tables: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    num_seqs: torch.Tensor,
+    scale: float,
+    sliding_window: int = None,
+    soft_cap: float = None
+) -> torch.Tensor:
+    """
+    CUDA implementation of paged attention.
+    
+    This is a placeholder implementation that returns a tensor with correct shape.
+    In production, this would call an actual CUDA kernel.
+    """
+    # For now, return zeros with correct shape
+    # This allows XLA to trace the graph correctly
+    batch_size, num_heads, head_size = query.shape
+    output = torch.zeros_like(query, dtype=query.dtype, device=query.device)
+    
+    # TODO: Replace with actual CUDA kernel implementation
+    # For example:
+    # import vllm._C
+    # output = vllm._C.paged_attention_v1(
+    #     query, key_cache, value_cache, 
+    #     context_lens, block_tables, 
+    #     scale, ...
+    # )
+    
+    return output
+
+
+@impl(xla_gpu_lib, "paged_attention", "CPU")
+def xla_gpu_paged_attention_cpu(
+    query: torch.Tensor,
+    kv_cache: torch.Tensor,
+    context_lens: torch.Tensor,
+    block_tables: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    num_seqs: torch.Tensor,
+    scale: float,
+    sliding_window: int = None,
+    soft_cap: float = None
+) -> torch.Tensor:
+    """CPU fallback implementation for testing."""
+    return torch.zeros_like(query)
+
+
+# Also register for XLA backend
+@impl(xla_gpu_lib, "paged_attention", "XLA")
 def xla_gpu_paged_attention_xla(
     query: torch.Tensor,
     kv_cache: torch.Tensor,
@@ -30,21 +79,13 @@ def xla_gpu_paged_attention_xla(
     sliding_window: int = None,
     soft_cap: float = None
 ) -> torch.Tensor:
-    # This is a placeholder implementation that can be captured by XLA
-    # In practice, this would call into a JAX implementation
-    # For now, return a tensor with the correct shape
-    batch_size, num_heads, head_size = query.shape
-    output_shape = query.shape
-    
-    # Create output tensor with correct shape
-    # This is just a placeholder - in practice this would call a real attention kernel
-    output = torch.zeros(output_shape, dtype=query.dtype, device=query.device)
-    
-    return output
+    """XLA implementation - same as CUDA for now."""
+    return torch.zeros_like(query, dtype=query.dtype, device=query.device)
 
 
-@impl(XLA_LIB, "xla_gpu_paged_attention", "CompositeExplicitAutograd")
-def xla_gpu_paged_attention_non_xla(
+# Register a fake/meta implementation for shape inference
+@torch.library.register_fake("xla_gpu::paged_attention")
+def xla_gpu_paged_attention_fake(
     query: torch.Tensor,
     kv_cache: torch.Tensor,
     context_lens: torch.Tensor,
@@ -55,12 +96,12 @@ def xla_gpu_paged_attention_non_xla(
     sliding_window: int = None,
     soft_cap: float = None
 ) -> torch.Tensor:
-    # Fallback implementation for non-XLA devices
-    # This is used for testing and debugging
-    return torch.zeros_like(query)
+    """Fake implementation for shape inference during tracing."""
+    # Return tensor with same shape as query
+    return torch.empty_like(query)
 
 
-# Wrapper function to call the custom op
+# Convenience wrapper function
 def xla_gpu_paged_attention(
     query: torch.Tensor,
     kv_cache: torch.Tensor,
@@ -93,7 +134,7 @@ def xla_gpu_paged_attention(
     Returns:
         output: [num_tokens, num_heads, head_size]
     """
-    return torch.ops.xla.xla_gpu_paged_attention(
+    return torch.ops.xla_gpu.paged_attention(
         query,
         kv_cache,
         context_lens,

@@ -1,13 +1,11 @@
 """Test XLA GPU custom op registration and usage."""
 
 import torch
-import torch_xla
-import torch_xla.core.xla_model as xm
 from vllm.v1.attention.backends.xla_gpu_paged_attention import xla_gpu_paged_attention
 
 
 def test_xla_gpu_paged_attention_op():
-    """Test that the custom XLA GPU paged attention op can be called and traced."""
+    """Test that the custom XLA GPU paged attention op can be called."""
     
     # Create test tensors with appropriate shapes
     batch_size = 2
@@ -27,8 +25,8 @@ def test_xla_gpu_paged_attention_op():
     num_seqs = torch.tensor(batch_size, dtype=torch.int32)
     scale = 1.0 / (head_size ** 0.5)
     
-    # Move to XLA device if available
-    device = xm.xla_device() if torch_xla.runtime.device_type() == "GPU" else "cpu"
+    # Move to CUDA if available
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     query = query.to(device)
     kv_cache = kv_cache.to(device)
     context_lens = context_lens.to(device)
@@ -60,10 +58,10 @@ def test_xla_gpu_paged_attention_op():
     return output
 
 
-def test_xla_compilation():
-    """Test that the custom op can be compiled with XLA."""
+def test_torch_compile():
+    """Test that the custom op can be compiled with torch.compile."""
     
-    @torch.compile(backend="openxla")
+    @torch.compile(fullgraph=True)
     def attention_with_custom_op(query, kv_cache, context_lens, block_tables, query_start_loc, num_seqs, scale):
         return xla_gpu_paged_attention(
             query=query,
@@ -86,8 +84,8 @@ def test_xla_compilation():
     num_seqs = torch.tensor(2, dtype=torch.int32)
     scale = 0.125
     
-    # Move to XLA device if available
-    device = xm.xla_device() if torch_xla.runtime.device_type() == "GPU" else "cpu"
+    # Move to CUDA if available
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     query = query.to(device)
     kv_cache = kv_cache.to(device)
     context_lens = context_lens.to(device)
@@ -100,9 +98,56 @@ def test_xla_compilation():
     
     # Verify result
     assert output.shape == query.shape
-    print("✓ XLA compilation with custom op test passed!")
+    print("✓ torch.compile with custom op test passed!")
     
     return output
+
+
+def test_xla_backend():
+    """Test the custom op with XLA backend if available."""
+    try:
+        import torch_xla
+        import torch_xla.core.xla_model as xm
+        
+        # Create test inputs
+        query = torch.randn(10, 8, 64)
+        kv_cache = torch.randn(4, 16, 16, 64)
+        context_lens = torch.tensor([5, 4], dtype=torch.int32)
+        block_tables = torch.zeros((2, 4), dtype=torch.int32)
+        query_start_loc = torch.tensor([0, 5], dtype=torch.int32)
+        num_seqs = torch.tensor(2, dtype=torch.int32)
+        scale = 0.125
+        
+        # Move to XLA device
+        device = xm.xla_device()
+        query = query.to(device)
+        kv_cache = kv_cache.to(device)
+        context_lens = context_lens.to(device)
+        block_tables = block_tables.to(device)
+        query_start_loc = query_start_loc.to(device)
+        num_seqs = num_seqs.to(device)
+        
+        # Call the custom op
+        output = xla_gpu_paged_attention(
+            query=query,
+            kv_cache=kv_cache,
+            context_lens=context_lens,
+            block_tables=block_tables,
+            query_start_loc=query_start_loc,
+            num_seqs=num_seqs,
+            scale=scale,
+            sliding_window=None,
+            soft_cap=None,
+        )
+        
+        # Mark step for XLA
+        xm.mark_step()
+        
+        assert output.shape == query.shape
+        print("✓ XLA backend test passed!")
+        
+    except ImportError:
+        print("⚠ XLA backend test skipped (torch_xla not available)")
 
 
 if __name__ == "__main__":
@@ -111,10 +156,13 @@ if __name__ == "__main__":
     # Test basic functionality
     test_xla_gpu_paged_attention_op()
     
-    # Test XLA compilation
+    # Test torch.compile
     try:
-        test_xla_compilation()
+        test_torch_compile()
     except Exception as e:
-        print(f"XLA compilation test skipped: {e}")
+        print(f"⚠ torch.compile test skipped: {e}")
     
-    print("\nAll tests passed!")
+    # Test XLA backend
+    test_xla_backend()
+    
+    print("\nAll available tests passed!")
