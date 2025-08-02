@@ -69,7 +69,9 @@ def _xla_custom_call_paged_attention(
         # Fallback if _xla_custom_call is not available
         # Use a computation that won't be optimized away
         print("Warning: _xla_custom_call not available, using fallback")
-        return query * scale + kv_cache.sum(dim=[0, 1], keepdim=True).expand_as(query) * 0.0001
+        # Fix dimension mismatch: kv_cache is 4D, query is 3D
+        kv_factor = kv_cache.sum(dim=[0, 1, 2, 3]) * 0.0001  # Reduce to scalar
+        return query * scale + kv_factor
 
 
 @impl(xla_gpu_lib, "paged_attention", "XLA")
