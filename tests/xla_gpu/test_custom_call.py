@@ -9,7 +9,6 @@ def test_custom_call_implementation():
     try:
         import torch_xla
         import torch_xla.core.xla_model as xm
-        import torch_xla._XLAC as xlac
         
         from vllm.v1.attention.backends.xla_gpu_paged_attention_custom_call import (
             xla_gpu_paged_attention_custom_call,
@@ -40,7 +39,7 @@ def test_custom_call_implementation():
         
         # Get HLO text
         print("\n2. HLO representation:")
-        hlo_text = xlac._get_xla_tensors_text([output])
+        hlo_text = torch_xla._XLAC._get_xla_tensors_text([output])
         print(hlo_text[:1500] + "..." if len(hlo_text) > 1500 else hlo_text)
         
         # Check for custom call

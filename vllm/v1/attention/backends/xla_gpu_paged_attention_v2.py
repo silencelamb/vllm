@@ -18,7 +18,7 @@ xla_gpu_lib.define(
 
 
 # Register XLA lowering for the custom op
-@xor.register_lowering("xla_gpu_v2::paged_attention")
+@xor.register("xla_gpu_v2::paged_attention")
 def xla_gpu_paged_attention_lowering(ctx, query, kv_cache, context_lens, 
                                    block_tables, query_start_loc, num_seqs,
                                    scale, sliding_window=None, soft_cap=None):

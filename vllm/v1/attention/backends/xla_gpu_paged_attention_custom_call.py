@@ -40,21 +40,20 @@ def _xla_custom_call_paged_attention(
     try:
         # Use torch_xla's internal API to create custom call
         # This will appear in HLO as: custom-call(...), custom_call_target="xla_gpu_paged_attention"
-        import torch_xla._XLAC as xlac
         
         # Get the underlying XLA tensors
         xla_args = [
-            xlac._get_xla_tensor(query),
-            xlac._get_xla_tensor(kv_cache),
-            xlac._get_xla_tensor(context_lens),
-            xlac._get_xla_tensor(block_tables),
-            xlac._get_xla_tensor(query_start_loc),
-            xlac._get_xla_tensor(num_seqs),
+            torch_xla._XLAC._get_xla_tensor(query),
+            torch_xla._XLAC._get_xla_tensor(kv_cache),
+            torch_xla._XLAC._get_xla_tensor(context_lens),
+            torch_xla._XLAC._get_xla_tensor(block_tables),
+            torch_xla._XLAC._get_xla_tensor(query_start_loc),
+            torch_xla._XLAC._get_xla_tensor(num_seqs),
         ]
         
         # Create output tensor with custom call
         # This uses XLA's custom call mechanism directly
-        output_xla_tensor = xlac._xla_custom_call(
+        output_xla_tensor = torch_xla._XLAC._xla_custom_call(
             xla_args,
             "xla_gpu_paged_attention",  # This name will appear in HLO
             [list(query.shape)],  # Output shapes
@@ -158,7 +157,7 @@ def register_xla_custom_op():
     This ensures it's recognized as a custom call.
     """
     try:
-        import torch_xla._XLAC as xlac
+        import torch_xla
         
         # Define the custom op handler
         def paged_attention_handler(args, backend_config):
@@ -170,8 +169,8 @@ def register_xla_custom_op():
         
         # Register with XLA runtime (if API is available)
         # Note: This API might vary between torch_xla versions
-        if hasattr(xlac, "register_custom_call"):
-            xlac.register_custom_call(
+        if hasattr(torch_xla._XLAC, "register_custom_call"):
+            torch_xla._XLAC.register_custom_call(
                 "xla_gpu_paged_attention",
                 paged_attention_handler
             )
