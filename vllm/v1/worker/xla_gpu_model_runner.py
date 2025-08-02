@@ -758,10 +758,11 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # Create a square mask to handle all tokens in the batch
         if padded_total_num_scheduled_tokens > 0:
             # Start with a full mask of -inf
+            # Use the model's dtype to avoid type mismatch
             attention_mask = torch.full(
                 (padded_total_num_scheduled_tokens, padded_total_num_scheduled_tokens),
                 float('-inf'),
-                dtype=torch.float32, device=self.device
+                dtype=self.dtype, device=self.device
             )
             
             # Build attention mask more efficiently
@@ -793,7 +794,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             attention_mask = torch.full(
                 (padded_total_num_scheduled_tokens, padded_total_num_scheduled_tokens),
                 float('-inf'),
-                dtype=torch.float32, device=self.device
+                dtype=self.dtype, device=self.device
             )
 
         # 4. Calculate is_prefill_token
@@ -852,11 +853,12 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             logger.info(f"Padded scheduled tokens: {padded_total_num_scheduled_tokens}")
             logger.info(f"Num scheduled tokens per req: {num_scheduled_tokens_per_req}")
             logger.info(f"Num computed tokens per req: {list(self.input_batch.num_computed_tokens_cpu[:num_reqs])}")
-            logger.info(f"Attention mask shape: {attention_mask.shape}")
-            logger.info(f"Slot mapping shape: {slot_mapping.shape}")
-            logger.info(f"Block tables shape: {block_tables.shape}")
+            logger.info(f"Attention mask shape: {attention_mask.shape}, dtype: {attention_mask.dtype}")
+            logger.info(f"Slot mapping shape: {slot_mapping.shape}, dtype: {slot_mapping.dtype}")
+            logger.info(f"Block tables shape: {block_tables.shape}, dtype: {block_tables.dtype}")
             logger.info(f"Is prefill: {is_prefill}")
             logger.info(f"First 10 slot mappings: {slot_mapping[:10].tolist()}")
+            logger.info(f"Model dtype: {self.dtype}")
         
         # NOTE(woosuk): Due to chunked prefills, there can be at most 1 partial
         # request in the batch. While we should not sample any token from this

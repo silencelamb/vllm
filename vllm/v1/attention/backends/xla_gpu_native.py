@@ -405,7 +405,9 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 context_len = k.shape[2]
                 # Create a mask that allows the query to attend to all keys
                 # Shape: [1, 1, 1, context_len] - all zeros (no masking)
-                attn_mask = torch.zeros(1, 1, 1, context_len, device=q.device, dtype=q.dtype)
+                # Use the same dtype as the attention_mask from metadata
+                mask_dtype = attn_metadata.attention_mask.dtype if hasattr(attn_metadata, 'attention_mask') and attn_metadata.attention_mask is not None else q.dtype
+                attn_mask = torch.zeros(1, 1, 1, context_len, device=q.device, dtype=mask_dtype)
             else:
                 # Prefill phase: use the provided causal mask
                 mask = attn_metadata.attention_mask
@@ -419,6 +421,10 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Use F.scaled_dot_product_attention
         # This is more efficient and XLA-friendly
+        # Ensure attention mask has the same dtype as query/key/value
+        if attn_mask is not None and attn_mask.dtype != q.dtype:
+            attn_mask = attn_mask.to(q.dtype)
+        
         attn_output = torch.nn.functional.scaled_dot_product_attention(
             query=q,
             key=k,
