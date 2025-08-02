@@ -310,7 +310,7 @@ def test_xla_gpu_compilation_simple():
     try:
         # Use local model
         llm = LLM(
-            model="Qwen/Qwen2.5-3B-Instruct",  # Please replace  #  "Qwen/Qwen2-1.5B-Instruct"
+            model="Qwen/Qwen3-0.6B",  # Please replace  #  "Qwen/Qwen2-1.5B-Instruct"
             max_num_batched_tokens=128,
             max_model_len=128,
             max_num_seqs=4,
