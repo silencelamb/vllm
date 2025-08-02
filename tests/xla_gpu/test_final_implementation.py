@@ -56,6 +56,7 @@ def test_xla_integration():
         import torch_xla.core.xla_model as xm
         
         from vllm.v1.attention.backends.xla_gpu_paged_attention_final import xla_gpu_paged_attention_final
+        from vllm.v1.attention.backends.xla_gpu_paged_attention_xla_custom import xla_gpu_paged_attention_xla_custom
         
         print("\n" + "=" * 60)
         print("Testing XLA Integration")
@@ -74,7 +75,8 @@ def test_xla_integration():
         scale = 0.125
         
         print("\nCalling custom op on XLA device...")
-        output = xla_gpu_paged_attention_final(
+        # Use the XLA-optimized version for XLA devices
+        output = xla_gpu_paged_attention_xla_custom(
             query, kv_cache, context_lens, block_tables,
             query_start_loc, num_seqs, scale
         )
