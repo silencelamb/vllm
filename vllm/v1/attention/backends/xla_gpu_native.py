@@ -498,8 +498,9 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         valid_mask_expanded = valid_mask.unsqueeze(-1).unsqueeze(-1)  # [num_tokens, 1, 1]
         
         # Apply mask to keys and values
-        masked_key = key * valid_mask_expanded.float()
-        masked_value = value * valid_mask_expanded.float()
+        # Convert mask to the same dtype as key/value to avoid type mismatch
+        masked_key = key * valid_mask_expanded.to(key.dtype)
+        masked_value = value * valid_mask_expanded.to(value.dtype)
         
         # Update cache using index_select and masked assignment
         # This approach avoids loops and is more XLA-friendly
