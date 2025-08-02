@@ -317,7 +317,7 @@ def test_xla_gpu_compilation_simple():
             enforce_eager=False,
             tensor_parallel_size=1,
             data_parallel_size=1,
-            gpu_memory_utilization=0.6,
+            gpu_memory_utilization=0.15,
             compilation_config= {
                 "custom_ops": ["none"],  # Disable custom ops for simplicity
                 "use_torch_compile": True,
