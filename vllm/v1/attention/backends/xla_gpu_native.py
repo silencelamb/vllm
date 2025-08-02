@@ -12,6 +12,7 @@ from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
 from vllm.attention.backends.utils import CommonAttentionState
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
+from vllm.v1.attention.backends.xla_gpu_paged_attention import xla_gpu_paged_attention
 
 logger = init_logger(__name__)
 
@@ -343,7 +344,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         attn_metadata: XlaGpuPagedMetadata,
         output: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        """Fallback PyTorch implementation using F.scaled_dot_product_attention."""
+        """PyTorch implementation using custom XLA GPU paged attention op."""
         
         # Get dimensions
         total_tokens = query.shape[0]
@@ -352,9 +353,21 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Reshape query for current tokens
         q = query.view(total_tokens, self.num_heads, self.head_size)
         
-        # Determine if this is prefill or decode phase
-        # XLA-friendly: avoid .item() calls
-        is_decode = total_tokens == 1
+        # Use our custom XLA GPU paged attention op
+        attn_output = xla_gpu_paged_attention(
+            query=q,
+            kv_cache=kv_cache,
+            context_lens=attn_metadata.context_lens,
+            block_tables=attn_metadata.block_tables,
+            query_start_loc=attn_metadata.query_start_loc,
+            num_seqs=attn_metadata.num_seqs,
+            scale=self.scale,
+            sliding_window=None,  # Not supported yet
+            soft_cap=self.logits_soft_cap,
+        )
+        
+        # Reshape output back to [total_tokens, hidden_size]
+        return attn_output.view(total_tokens, self.num_heads * self.head_size)
         
         # Try to use KV cache if available for decode phase
         if (is_decode and hasattr(attn_metadata, 'context_lens') 
