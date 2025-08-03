@@ -24,13 +24,17 @@ def test_true_custom_call():
     print("\n1. Testing direct _xla_custom_call...")
     try:
         # This should create a custom-call in HLO
+        # Based on the error, the function expects positional arguments:
+        # (inputs, target_name, output_shapes, output_dtypes, has_side_effect, backend_config, api_version, extra_attrs)
         outputs = torch_xla._XLAC._xla_custom_call(
-            [query, kv_cache],
-            output_dtypes=['float32'],
-            output_shapes=[[4, 8, 64]],
-            target_name="MyCustomPagedAttention",  # This name will appear in HLO
-            has_side_effect=False,
-            backend_config="scale=0.125"
+            [query, kv_cache],  # arg0: list[torch.Tensor]
+            "MyCustomPagedAttention",  # arg1: str (target_name)
+            [[4, 8, 64]],  # arg2: list[list[int]] (output_shapes)
+            ['float32'],  # arg3: list[object] (output_dtypes)
+            False,  # arg4: bool (has_side_effect)
+            "scale=0.125",  # arg5: str (backend_config)
+            4,  # arg6: int (api_version)
+            {}  # arg7: dict[str, str] (extra attributes)
         )
         output1 = outputs[0]
         
@@ -93,13 +97,16 @@ def test_minimal_custom_call():
     
     try:
         # Simplest possible custom call
+        # Using positional arguments based on the function signature
         result = torch_xla._XLAC._xla_custom_call(
-            [x],
-            output_dtypes=['float32'],
-            output_shapes=[[3]],
-            target_name="SimpleCustomOp",
-            has_side_effect=False,
-            backend_config=""
+            [x],  # arg0: list[torch.Tensor]
+            "SimpleCustomOp",  # arg1: str (target_name)
+            [[3]],  # arg2: list[list[int]] (output_shapes)
+            ['float32'],  # arg3: list[object] (output_dtypes)
+            False,  # arg4: bool (has_side_effect)
+            "",  # arg5: str (backend_config)
+            4,  # arg6: int (api_version)
+            {}  # arg7: dict[str, str] (extra attributes)
         )[0]
         
         xm.mark_step()
