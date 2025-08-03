@@ -29,7 +29,6 @@ def register_custom_call_correctly():
     
     # Step 3: Create Python capsule
     # The API expects a PyCapsule, not a raw integer
-    # Note: ctypes is already imported at module level
     
     # PyCapsule_New(pointer, name, destructor)
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
@@ -83,7 +82,7 @@ def test_registered_custom_call():
         )[0]
         return result
     
-    @torch.library.impl_abstract("test_correct::simple_add")
+    torch.library.register_fake("test_correct::simple_add")
     def simple_add_meta(a, b):
         return torch.empty_like(a)
     

@@ -4,7 +4,6 @@ import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
 import ctypes
-import ctypes.pythonapi
 import os
 
 
@@ -73,6 +72,8 @@ def main():
     
     # Check IR
     ir = torch_xla._XLAC._get_xla_tensors_text([result])
+    print("\nHLO IR (first 1000 chars):")
+    print(ir[:1000])
     print(f"✅ Custom call in IR: {'custom_call' in ir.lower()}")
     
     # Execute

@@ -81,7 +81,7 @@ def paged_attention_xla(query, kv_cache, context_lens, block_tables,
 
 
 # Meta implementation for shape inference
-@torch.library.impl_abstract("xla_gpu_practical::paged_attention")
+@torch.library.register_fake("xla_gpu_practical::paged_attention")
 def paged_attention_meta(query, kv_cache, context_lens, block_tables,
                          query_start_loc, num_seqs, scale,
                          sliding_window=None, soft_cap=None):
