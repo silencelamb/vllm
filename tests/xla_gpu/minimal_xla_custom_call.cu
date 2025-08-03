@@ -4,6 +4,14 @@
 #include <cuda_runtime.h>
 #include <cstdio>
 
+// CUDA kernel definition (must be outside extern "C")
+__global__ void SimpleAddKernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
 extern "C" {
 
 // The custom call function signature expected by XLA
@@ -27,30 +35,12 @@ void XlaGpuSimpleAdd(
     // Hardcoded size for demo (real impl would parse from opaque)
     const int size = 3;
     
-    // Simple CUDA kernel inline
-    auto kernel = [=] __device__ (int idx) {
-        if (idx < size) {
-            out[idx] = a[idx] + b[idx];
-        }
-    };
-    
     // Launch kernel
     const int threads = 256;
     const int blocks = (size + threads - 1) / threads;
     
-    // Simple kernel launch - traditional approach
-    // Define kernel as separate function
-    struct AddKernel {
-        static __global__ void run(const float* a, const float* b, float* out, int size) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx < size) {
-                out[idx] = a[idx] + b[idx];
-            }
-        }
-    };
-    
-    // Launch kernel
-    AddKernel::run<<<blocks, threads, 0, stream>>>(a, b, out, size);
+    // Call the kernel defined at the top of the file
+    SimpleAddKernel<<<blocks, threads, 0, stream>>>(a, b, out, size);
 }
 
 // This symbol must be discoverable by XLA at runtime
