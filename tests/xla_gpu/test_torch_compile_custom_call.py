@@ -122,7 +122,7 @@ def test_torch_compile_with_custom_op():
         a_cpu = torch.tensor([1.0, 2.0, 3.0])
         b_cpu = torch.tensor([4.0, 5.0, 6.0])
         
-        result = compiled_fn(a_cpu, b_cpu)
+        result = compiled_fn(a, b)
         print(f"✅ Compiled result: {result}")
         
         # Check if custom call was used
