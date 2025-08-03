@@ -33,7 +33,7 @@ def scale_add_xla(input, scale, offset):
 
 
 # Meta implementation
-@torch.library.impl_abstract("xla_gpu_working::scale_add")
+@torch.library.register_fake("xla_gpu_working::scale_add")
 def scale_add_meta(input, scale, offset):
     """Meta implementation for shape inference."""
     return torch.empty_like(input)
@@ -71,6 +71,7 @@ def test_working_custom_op():
     # Check the graph
     print("\nChecking XLA graph...")
     graph = torch_xla._XLAC._get_xla_tensors_text([input])
+    print(graph)  # Print first 1000 chars of the graph
     print(f"Graph contains multiply and add operations (compiled from custom op)")
 
 
@@ -156,7 +157,7 @@ def create_paged_attention_op():
         
         return output
     
-    @torch.library.impl_abstract("xla_gpu_attention::paged_attention")
+    @torch.library.register_fake("xla_gpu_attention::paged_attention")
     def paged_attention_meta(query, kv_cache, context_lens, scale):
         """Meta implementation."""
         return torch.empty_like(query)

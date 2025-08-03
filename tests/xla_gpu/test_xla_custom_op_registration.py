@@ -58,7 +58,7 @@ def simple_add_xla(a, b):
 
 
 # Meta implementation for shape inference
-@torch.library.impl_abstract("xla_gpu_test::simple_add")
+@torch.library.register_fake("xla_gpu_test::simple_add")
 def simple_add_meta(a, b):
     """Meta implementation for shape inference."""
     # Check shapes match
