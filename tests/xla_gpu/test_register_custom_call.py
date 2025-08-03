@@ -80,41 +80,35 @@ def test_register_custom_call():
         print("\nAttempting to register custom call...")
         
         try:
-            # Try different parameter combinations
-            # Option 1: (name, platform, address)
-            try:
-                torch_xla._XLAC._xla_register_custom_call_target(
-                    "XlaGpuSimpleAdd",  # name
-                    "CUDA",             # platform
-                    func_addr           # function address
-                )
-                print("✅ Registration successful (name, platform, address)!")
-            except Exception as e1:
-                print(f"❌ Failed with (name, platform, address): {e1}")
-                
-                # Option 2: (name, address, platform)
-                try:
-                    torch_xla._XLAC._xla_register_custom_call_target(
-                        "XlaGpuSimpleAdd",  # name
-                        func_addr,          # function address
-                        "CUDA"              # platform
-                    )
-                    print("✅ Registration successful (name, address, platform)!")
-                except Exception as e2:
-                    print(f"❌ Failed with (name, address, platform): {e2}")
-                    
-                    # Option 3: Just (name, address)
-                    try:
-                        torch_xla._XLAC._xla_register_custom_call_target(
-                            "XlaGpuSimpleAdd",
-                            func_addr
-                        )
-                        print("✅ Registration successful (name, address)!")
-                    except Exception as e3:
-                        print(f"❌ Failed with (name, address): {e3}")
+            # Create PyCapsule from function pointer
+            print("Creating PyCapsule...")
+            import ctypes.pythonapi
+            
+            # PyCapsule_New function
+            PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+            PyCapsule_New.restype = ctypes.py_object
+            PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+            
+            # Create capsule
+            capsule = PyCapsule_New(
+                func_addr,      # pointer
+                None,           # name (can be NULL)
+                None            # destructor (NULL)
+            )
+            print(f"✅ Created PyCapsule: {type(capsule)}")
+            
+            # Register with correct signature: (str, capsule, str)
+            torch_xla._XLAC._xla_register_custom_call_target(
+                "XlaGpuSimpleAdd",  # name
+                capsule,            # PyCapsule
+                "CUDA"              # platform
+            )
+            print("✅ Registration successful!")
                         
         except Exception as e:
             print(f"❌ Registration failed: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print("❌ Registration API not available")
 

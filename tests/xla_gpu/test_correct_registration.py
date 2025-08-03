@@ -29,7 +29,7 @@ def register_custom_call_correctly():
     
     # Step 3: Create Python capsule
     # The API expects a PyCapsule, not a raw integer
-    import ctypes.pythonapi
+    # Note: ctypes is already imported at module level
     
     # PyCapsule_New(pointer, name, destructor)
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
