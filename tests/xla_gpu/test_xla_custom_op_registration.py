@@ -170,10 +170,54 @@ def test_complex_shapes():
         print(f"✅ Shape {shape} passed")
 
 
+def load_xla_custom_call_library():
+    """Try to load the compiled XLA custom call library."""
+    import ctypes
+    import glob
+    
+    # Look for compiled libraries
+    lib_patterns = [
+        './xla_gpu_custom_ops.so',
+        './xla_simple_add.so',
+        'tests/xla_gpu/xla_gpu_custom_ops.so',
+        'tests/xla_gpu/xla_simple_add.so',
+    ]
+    
+    for pattern in lib_patterns:
+        libs = glob.glob(pattern)
+        if libs:
+            try:
+                # Load with RTLD_GLOBAL so XLA can find the symbols
+                lib_path = os.path.abspath(libs[0])
+                ctypes.CDLL(lib_path, ctypes.RTLD_GLOBAL)
+                print(f"✅ Loaded XLA custom call library: {lib_path}")
+                return True
+            except Exception as e:
+                print(f"⚠️  Failed to load {libs[0]}: {e}")
+    
+    print("⚠️  No XLA custom call library found. Build it first with:")
+    print("    cd tests/xla_gpu && bash build_and_test.sh")
+    return False
+
+
 if __name__ == "__main__":
     # Enable debugging
     os.environ['XLA_FLAGS'] = '--xla_dump_to=./xla_dump_registration --xla_dump_hlo_as_text'
     os.environ['PT_XLA_DEBUG'] = '1'
+    
+    # Try to load the custom call library
+    print("=" * 60)
+    print("Loading XLA Custom Call Library")
+    print("=" * 60)
+    has_library = load_xla_custom_call_library()
+    
+    if has_library:
+        print("\n🚀 Running tests with loaded custom call implementation")
+    else:
+        print("\n⚠️  Running tests without custom call implementation")
+        print("   Custom calls will appear in IR but execution will fail")
+    
+    print("\n" + "=" * 60)
     
     test_custom_op_registration()
     test_with_torch_compile()
@@ -185,3 +229,11 @@ if __name__ == "__main__":
     print("2. XLA implementation uses _xla_custom_call to create custom-call nodes")
     print("3. Execution will fail unless the custom call is registered with XLA runtime")
     print("4. Check ./xla_dump_registration/ for HLO dumps")
+    
+    if has_library:
+        print("\n✅ XLA custom call library was loaded")
+        print("   If execution still fails, XLA may not be finding the symbols")
+        print("   Try running with: LD_PRELOAD=./xla_gpu_custom_ops.so python " + __file__)
+    else:
+        print("\n❌ No XLA custom call library loaded")
+        print("   Build it first: cd tests/xla_gpu && bash build_and_test.sh")
