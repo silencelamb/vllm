@@ -7,7 +7,7 @@ echo "=== Building XLA Custom Call ==="
 
 # Option 1: Direct nvcc compilation
 echo "Compiling with nvcc..."
-nvcc -O2 -shared -fPIC \
+nvcc -O2 -shared -Xcompiler -fPIC \
     -o xla_gpu_custom_ops.so \
     minimal_xla_custom_call.cu \
     -lcudart

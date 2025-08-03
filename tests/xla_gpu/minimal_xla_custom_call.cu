@@ -38,19 +38,19 @@ void XlaGpuSimpleAdd(
     const int threads = 256;
     const int blocks = (size + threads - 1) / threads;
     
-    // Use CUDA lambda launch (requires CUDA 11+)
-    auto lambda_kernel = [=] __global__ () {
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        kernel(idx);
+    // Simple kernel launch - traditional approach
+    // Define kernel as separate function
+    struct AddKernel {
+        static __global__ void run(const float* a, const float* b, float* out, int size) {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx < size) {
+                out[idx] = a[idx] + b[idx];
+            }
+        }
     };
     
-    // Alternative: traditional kernel launch
-    void* kernelArgs[] = { &a, &b, &out, &size };
-    cudaLaunchKernel(
-        (void*)lambda_kernel,
-        dim3(blocks), dim3(threads),
-        kernelArgs, 0, stream
-    );
+    // Launch kernel
+    AddKernel::run<<<blocks, threads, 0, stream>>>(a, b, out, size);
 }
 
 // This symbol must be discoverable by XLA at runtime
