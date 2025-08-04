@@ -243,7 +243,7 @@ def test_xla_gpu_compilation_simple():
     
     os.environ["VLLM_USE_XLA_GPU"] = "1"
     os.environ["VLLM_USE_V1"] = "1"
-    os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+    # os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
 
     # 禁用可能有问题的自定义算子
     os.environ["VLLM_USE_TRITON_FLASH_ATTN"] = "0"
@@ -267,11 +267,11 @@ def test_xla_gpu_compilation_simple():
     os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
     
     # 添加XLA调试信息
-    os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump --xla_dump_hlo_pass_re=.*"
-    os.environ["XLA_HLO_DEBUG"] = "1"
-    os.environ["XLA_IR_DEBUG"] = "1"
-    os.environ["XLA_SAVE_TENSORS_FILE"] = "/tmp/xla_tensors.txt"
-    os.environ["XLA_SAVE_TENSORS_FMT"] = "text"
+    # os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump --xla_dump_hlo_pass_re=.*"
+    # os.environ["XLA_HLO_DEBUG"] = "1"
+    # os.environ["XLA_IR_DEBUG"] = "1"
+    # os.environ["XLA_SAVE_TENSORS_FILE"] = "/tmp/xla_tensors.txt"
+    # os.environ["XLA_SAVE_TENSORS_FMT"] = "text"
     
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
