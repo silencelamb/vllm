@@ -78,15 +78,20 @@ class XlaRmsNormOp:
             epsilon, batch_size, hidden_size, input.dtype
         )
         
-        # Call XLA custom call
-        output_2d = torch_xla._XLAC._xla_custom_call(
-            output_shape=input_2d.shape,
-            output_dtype=input.dtype,
-            inputs=[input_2d, weight],
-            target_name=XlaRmsNormOp.TARGET_NAME,
-            opaque=descriptor,
-            has_side_effect=False
+        # Call XLA custom call - correct parameter order
+        # Signature: (inputs, target_name, output_shapes, output_dtypes, 
+        #            has_side_effect, opaque, backend_config, operand_layouts)
+        outputs = torch_xla._XLAC._xla_custom_call(
+            [input_2d, weight],  # inputs
+            XlaRmsNormOp.TARGET_NAME,  # target_name
+            [list(input_2d.shape)],  # output_shapes (list of lists)
+            [input.dtype],  # output_dtypes (list)
+            False,  # has_side_effect
+            descriptor,  # opaque
+            0,  # backend_config (unused)
+            {}  # operand_layouts (unused)
         )
+        output_2d = outputs[0]  # Get first output
         
         # Reshape back to original shape
         return output_2d.reshape(original_shape)
