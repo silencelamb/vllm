@@ -65,6 +65,7 @@ def debug_custom_call():
         # Try to execute
         xm.mark_step()
         xm.wait_device_ops()
+        print(result)
         result_cpu = result.cpu()
         print("✅ Execution successful!")
         print(f"✅ SUCCESS with API version {api_version}!")

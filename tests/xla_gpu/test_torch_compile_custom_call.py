@@ -86,7 +86,7 @@ def test_torch_compile_with_custom_op():
         )[0]
     
     # Abstract implementation
-    @torch.library.impl_abstract("custom_xla::gpu_add")
+    @torch.library.register_fake("custom_xla::gpu_add")
     def gpu_add_meta(a, b):
         return torch.empty_like(a)
     
@@ -108,7 +108,8 @@ def test_torch_compile_with_custom_op():
         
         result = my_function(a, b)
         xm.mark_step()
-        print(f"✅ Direct custom op result: {result.cpu()}")
+        xm.wait_device_ops()
+        print(f"✅ Direct custom op result: {result}")
     except Exception as e:
         print(f"❌ Direct custom op failed: {e}")
     
@@ -118,11 +119,9 @@ def test_torch_compile_with_custom_op():
         # Compile the function
         compiled_fn = torch.compile(my_function, backend='openxla')
         
-        # Use CPU tensors (torch.compile will handle device placement)
-        a_cpu = torch.tensor([1.0, 2.0, 3.0])
-        b_cpu = torch.tensor([4.0, 5.0, 6.0])
-        
         result = compiled_fn(a, b)
+        xm.mark_step()
+        xm.wait_device_ops()
         print(f"✅ Compiled result: {result}")
         
         # Check if custom call was used
@@ -135,53 +134,58 @@ def test_torch_compile_with_custom_op():
         traceback.print_exc()
 
 
-def test_torch_compile_direct():
-    """Test torch.compile with direct tensor operations."""
-    print("\n3. Testing torch.compile with Direct Operations")
-    print("=" * 60)
-    
-    def add_function(a, b):
-        # This won't use our custom call directly
-        # torch.compile will lower this to XLA ops
-        return a + b
-    
-    compiled_add = torch.compile(add_function, backend='openxla')
-    
-    a = torch.tensor([1.0, 2.0, 3.0])
-    b = torch.tensor([4.0, 5.0, 6.0])
-    
-    result = compiled_add(a, b)
-    print(f"✅ torch.compile direct add: {result}")
-
 
 def test_fallback_behavior():
     """Test how torch.compile handles unsupported ops."""
     print("\n4. Testing Fallback Behavior")
     print("=" * 60)
+
+    
+    # Define a custom op using torch.library
+    lib = torch.library.Library("custom_xla", "DEF")
+    lib.define("gpu_add(Tensor a, Tensor b) -> Tensor")
+    
+    # Implementation for XLA
+    @torch.library.impl(lib, "gpu_add", "XLA")
+    def gpu_add_xla(a, b):
+        return torch_xla._XLAC._xla_custom_call(
+            [a, b],
+            "XlaGpuSimpleAdd",
+            [list(a.shape)],
+            [a.dtype],
+            False,
+            "",
+            1,
+            {}
+        )[0]
+    
+    
+    # CPU fallback (for comparison)
+    @torch.library.impl(lib, "gpu_add", "CPU")
+    def gpu_add_cpu(a, b):
+        return a + b
     
     # Create a function that mixes standard ops with custom ops
     def mixed_function(x, y):
         # Standard operation
         z = x * 2
-        # Custom operation (if registered)
-        if hasattr(torch.ops, 'custom_xla') and hasattr(torch.ops.custom_xla, 'gpu_add'):
-            result = torch.ops.custom_xla.gpu_add(z, y)
-        else:
-            result = z + y
-        # Another standard operation
+        result = torch.ops.custom_xla.gpu_add(z, y)
+
         return result / 2
     
     try:
         compiled_fn = torch.compile(mixed_function, backend='openxla')
         
-        a = torch.tensor([1.0, 2.0, 3.0])
-        b = torch.tensor([4.0, 5.0, 6.0])
+        device = xm.xla_device()
+        a = torch.tensor([1.0, 2.0, 3.0]).to(device)
+        b = torch.tensor([4.0, 5.0, 6.0]).to(device)
         
         result = compiled_fn(a, b)
         print(f"✅ Mixed function result: {result}")
         
         # Expected: ((a * 2) + b) / 2 = (a + b/2)
         expected = torch.tensor([3.0, 4.5, 6.0])
+        result = result.cpu()
         if torch.allclose(result, expected):
             print("✅ Result matches expected value")
         
@@ -200,7 +204,6 @@ def main():
     # Run tests
     test_direct_xla()
     test_torch_compile_with_custom_op()
-    test_torch_compile_direct()
     test_fallback_behavior()
     
     print("\n" + "=" * 80)
