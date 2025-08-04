@@ -92,20 +92,8 @@ def create_custom_op_with_cuda():
     # Load the CUDA extension
     print("\n1. Compiling CUDA kernel...")
     try:
-        # Create a simple C++ wrapper that declares the CUDA function
-        cpp_wrapper = '''
-        #include <torch/extension.h>
-        
-        // Forward declaration of CUDA function
-        torch::Tensor simple_add_cuda(torch::Tensor a, torch::Tensor b);
-        
-        PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-            m.def("simple_add_cuda", &simple_add_cuda, "Simple add CUDA kernel");
-        }
-        '''
-        
-        # CUDA implementation without PYBIND11_MODULE (will be in separate file)
-        cuda_impl = '''
+        # Combined CUDA source with kernel and wrapper
+        cuda_complete = '''
         #include <torch/extension.h>
         #include <cuda_runtime.h>
         
@@ -158,13 +146,18 @@ def create_custom_op_with_cuda():
             
             return out;
         }
+        
+        // Python bindings
+        PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+            m.def("simple_add_cuda", &simple_add_cuda, "Simple add CUDA kernel");
+        }
         '''
         
         # JIT compile the CUDA code
         cuda_ext = load_inline(
             name='simple_add_cuda_ext',
-            cpp_sources=[cpp_wrapper],
-            cuda_sources=[cuda_impl],
+            cpp_sources=[],  # No separate C++ sources
+            cuda_sources=[cuda_complete],  # Everything in CUDA file
             functions=['simple_add_cuda'],
             verbose=True,
             extra_cuda_cflags=['-O2']
