@@ -732,101 +732,13 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             self.set_active_loras(self.input_batch,
                                   padded_num_scheduled_tokens_per_req)
 
-        # Calculate additional fields needed before creating attn_metadata
-        # 1. Calculate token_to_seq_mapping
-        # Mark which sequence each token belongs to
-        token_to_seq_mapping = []
-        for req_idx in range(num_reqs):
-            num_tokens_for_req = num_scheduled_tokens_per_req[req_idx]
-            token_to_seq_mapping.extend([req_idx] * num_tokens_for_req)
-
-        # Pad token_to_seq_mapping to match padded input size
-        # Pad with the last request index (or 0 if no requests)
-        pad_value = num_reqs - 1 if num_reqs > 0 else 0
-        padding_length = padded_total_num_scheduled_tokens - total_num_scheduled_tokens
-        token_to_seq_mapping.extend([pad_value] * padding_length)
-
-        token_to_seq_mapping = torch.tensor(token_to_seq_mapping, 
-                                            dtype=torch.int32, 
-                                            device=self.device)
-
-        # 2. Calculate max_context_len
+        # Calculate max_context_len for metadata
         max_context_len = seq_lens.max().item() if len(seq_lens) > 0 else 0
 
-        # 3. Attention mask calculation supporting chunked-prefill
-        # For XLA GPU, we need consistent shapes between compile and runtime
-        # Create a square mask to handle all tokens in the batch
-        if padded_total_num_scheduled_tokens > 0:
-            # Start with a full mask of -inf
-            # Use the model's dtype to avoid type mismatch
-            attention_mask = torch.full(
-                (padded_total_num_scheduled_tokens, padded_total_num_scheduled_tokens),
-                float('-inf'),
-                dtype=self.dtype, device=self.device
-            )
-            
-            # Build attention mask more efficiently
-            # First, create a mapping of token positions for each request
-            token_start_idx = 0
-            for req_idx in range(num_reqs):
-                req_num_tokens = num_scheduled_tokens_per_req[req_idx]
-                req_computed_tokens = self.input_batch.num_computed_tokens_cpu[req_idx]
-                
-                # Create causal mask for tokens within the same request
-                for i in range(req_num_tokens):
-                    query_idx = token_start_idx + i
-                    query_abs_pos = req_computed_tokens + i
-                    
-                    # This query token can attend to all tokens in the same request
-                    # up to and including its absolute position
-                    for j in range(req_num_tokens):
-                        key_idx = token_start_idx + j
-                        key_abs_pos = req_computed_tokens + j
-                        
-                        if key_abs_pos <= query_abs_pos:
-                            attention_mask[query_idx, key_idx] = 0.0
-                
-                token_start_idx += req_num_tokens
-            
-            # Padding tokens already have -inf (cannot attend to anything)
-        else:
-            # For XLA GPU, use square attention mask for consistency
-            attention_mask = torch.full(
-                (padded_total_num_scheduled_tokens, padded_total_num_scheduled_tokens),
-                float('-inf'),
-                dtype=self.dtype, device=self.device
-            )
-
-        # 4. Calculate is_prefill_token
-        # Determine which tokens are prefill (first-time processing) vs decode (generation)
-        is_prefill_token = torch.zeros(padded_total_num_scheduled_tokens, 
-                                    dtype=torch.bool, device=self.device)
-
-        token_idx = 0
-        for req_idx in range(num_reqs):
-            req_id = self.input_batch.req_ids[req_idx]
-            req_state = self.requests[req_id]
-            num_computed = req_state.num_computed_tokens
-            num_scheduled = num_scheduled_tokens_per_req[req_idx]
-            
-            # If this request has 0 computed tokens, it's first-time processing (prefill)
-            # Otherwise it's decode
-            is_prefill = (num_computed == 0)
-            
-            for _ in range(num_scheduled):
-                is_prefill_token[token_idx] = is_prefill
-                token_idx += 1
-        
-        # Padding tokens are marked as decode (False)
-        is_prefill_token[total_num_scheduled_tokens:] = False
-
-        # Debug shapes
+        # Debug shapes (removed attention_mask related logging)
         logger.debug(f"slot_mapping shape: {slot_mapping.shape}")
         logger.debug(f"block_tables shape: {block_tables.shape}")
         logger.debug(f"seq_lens shape: {seq_lens.shape}")
-        logger.debug(f"token_to_seq_mapping shape: {token_to_seq_mapping.shape}")
-        logger.debug(f"attention_mask shape: {attention_mask.shape}")
-        logger.debug(f"is_prefill_token shape: {is_prefill_token.shape}")
         
         # Create metadata suitable for Flash Attention
         # We need to prepare data in the format that flash_attn_varlen_func expects
@@ -843,42 +755,33 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             self.seq_lens_np[:num_reqs], dtype=torch.int32, device=self.device
         )
         
-        # For prefill, we need to distinguish prefill vs decode metadata
-        # Check if this is a prefill batch (any request has num_computed_tokens == 0)
-        is_prefill_batch = any(
-            self.requests[self.input_batch.req_ids[i]].num_computed_tokens == 0
-            for i in range(num_reqs)
+        # Create XlaGpuPagedMetadata matching FlashAttentionMetadata structure
+        attn_metadata = XlaGpuPagedMetadata(
+            # Core attention metadata (matching FlashAttentionMetadata)
+            num_actual_tokens=total_num_scheduled_tokens,
+            max_query_len=max_num_scheduled_tokens_all_reqs,
+            query_start_loc=flash_query_start_loc,
+            max_seq_len=max_context_len,
+            seq_lens=seq_lens,
+            block_table=block_tables,
+            slot_mapping=slot_mapping,
+            
+            # Cascade attention fields (not used in XLA GPU yet)
+            use_cascade=False,
+            common_prefix_len=0,
+            cu_prefix_query_lens=None,
+            prefix_kv_lens=None,
+            suffix_kv_lens=None,
+            
+            # Optional scheduling metadata
+            scheduler_metadata=None,
+            prefix_scheduler_metadata=None,
+            max_num_splits=0,
+            
+            # Additional XLA GPU specific fields for backward compatibility
+            seq_lens_tensor=seq_lens_tensor,
+            block_tables=block_tables,  # Alternative name for block_table
         )
-        
-        if is_prefill_batch:
-            # Create PrefillMetadata-like object
-            from collections import namedtuple
-            PrefillMeta = namedtuple('PrefillMeta', [
-                'query_start_loc', 'max_query_len', 'seq_lens_tensor',
-                'seq_lens', 'block_tables', 'slot_mapping'
-            ])
-            
-            attn_metadata = PrefillMeta(
-                query_start_loc=flash_query_start_loc,
-                max_query_len=max_num_scheduled_tokens_all_reqs,
-                seq_lens_tensor=seq_lens_tensor,
-                seq_lens=seq_lens,
-                block_tables=block_tables,
-                slot_mapping=slot_mapping,
-            )
-        else:
-            # Create DecodeMeta-like object for decode phase
-            from collections import namedtuple
-            DecodeMeta = namedtuple('DecodeMeta', [
-                'seq_lens_tensor', 'seq_lens', 'block_tables', 'slot_mapping'
-            ])
-            
-            attn_metadata = DecodeMeta(
-                seq_lens_tensor=seq_lens_tensor,
-                seq_lens=seq_lens,
-                block_tables=block_tables,
-                slot_mapping=slot_mapping,
-            )
         
         # Add debug logging
         import os
@@ -890,10 +793,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             logger.info(f"Padded scheduled tokens: {padded_total_num_scheduled_tokens}")
             logger.info(f"Num scheduled tokens per req: {num_scheduled_tokens_per_req}")
             logger.info(f"Num computed tokens per req: {list(self.input_batch.num_computed_tokens_cpu[:num_reqs])}")
-            logger.info(f"Attention mask shape: {attention_mask.shape}, dtype: {attention_mask.dtype}")
             logger.info(f"Slot mapping shape: {slot_mapping.shape}, dtype: {slot_mapping.dtype}")
             logger.info(f"Block tables shape: {block_tables.shape}, dtype: {block_tables.dtype}")
-            logger.info(f"Is prefill: {is_prefill}")
             logger.info(f"First 10 slot mappings: {slot_mapping[:10].tolist()}")
             logger.info(f"Model dtype: {self.dtype}")
         
@@ -1355,10 +1256,6 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         position_ids = torch.zeros(MAX_TOKENS,
                                 dtype=torch.int32).to(self.device)
         
-        padded_num_slices = _get_padded_num_kv_cache_update_slices(
-            MAX_TOKENS, MAX_REQS, self.block_size)
-        num_kv_update_slices = torch.tensor([padded_num_slices],
-                                            dtype=torch.int32).to(self.device)
         # XLA GPU uses 1D slot mapping, not 3D like TPU
         slot_mapping = torch.zeros(MAX_TOKENS,
                                 dtype=torch.int64).to(self.device)
@@ -1370,49 +1267,35 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                                                     dtype=torch.int32),
                                     dim=0,
                                     dtype=torch.int32).to(self.device)
-        context_lens = torch.ones((MAX_REQS,),
-                                dtype=torch.int32).to(self.device)
-        num_seqs = torch.tensor([actual_num_reqs],
-                                dtype=torch.int32).to(self.device)
         
-        # 简化token_to_seq_mapping创建
-        token_to_seq_mapping = torch.zeros(MAX_TOKENS,
-                                        dtype=torch.int32,
-                                        device=self.device)
-        # 均匀分布tokens到sequences
-        tokens_per_seq = MAX_TOKENS // actual_num_reqs
-        for seq_idx in range(actual_num_reqs):
-            start_idx = seq_idx * tokens_per_seq
-            end_idx = min((seq_idx + 1) * tokens_per_seq, MAX_TOKENS)
-            if seq_idx == actual_num_reqs - 1:  # 最后一个sequence获得剩余tokens
-                end_idx = MAX_TOKENS
-            token_to_seq_mapping[start_idx:end_idx] = seq_idx
-        
-        # 使用固定尺寸的attention mask
-        # 使用模型的dtype以避免类型不匹配
-        # Create square attention mask for XLA consistency
-        attention_mask = torch.zeros(
-            (MAX_TOKENS, MAX_TOKENS),
-            dtype=self.dtype, device=self.device
-        )
-        # 创建简单的causal mask for the first num_tokens
-        for i in range(num_tokens):
-            attention_mask[i, :i+1] = 0.0  # Can attend to previous positions and self
-            attention_mask[i, i+1:] = float('-inf')  # Cannot attend to future positions
-        # Padding tokens cannot attend to anything
-        attention_mask[num_tokens:, :] = float('-inf')
-        
-        is_prefill_token = torch.ones(MAX_TOKENS, dtype=torch.bool, device=self.device)
+        # Create dummy metadata matching FlashAttention structure
+        seq_lens = torch.ones((MAX_REQS,), dtype=torch.int32).to(self.device) * MAX_TOKENS
         
         attn_metadata = XlaGpuPagedMetadata(
+            # Core attention metadata (matching FlashAttentionMetadata)
+            num_actual_tokens=MAX_TOKENS,
+            max_query_len=MAX_TOKENS,
+            query_start_loc=query_start_loc,
+            max_seq_len=MAX_CONTEXT_LEN,
+            seq_lens=seq_lens,
+            block_table=block_tables,
             slot_mapping=slot_mapping,
-            block_tables=block_tables,
-            context_lens=context_lens,
-            token_to_seq_mapping=token_to_seq_mapping,
-            attention_mask=attention_mask,
-            is_prefill_token=is_prefill_token,
-            max_context_len=MAX_CONTEXT_LEN,
-            block_size=self.block_size,
+            
+            # Cascade attention fields (not used in XLA GPU yet)
+            use_cascade=False,
+            common_prefix_len=0,
+            cu_prefix_query_lens=None,
+            prefix_kv_lens=None,
+            suffix_kv_lens=None,
+            
+            # Optional scheduling metadata
+            scheduler_metadata=None,
+            prefix_scheduler_metadata=None,
+            max_num_splits=0,
+            
+            # Additional XLA GPU specific fields for backward compatibility
+            seq_lens_tensor=seq_lens,
+            block_tables=block_tables,  # Alternative name for block_table
         )
 
         # 在forward之前配置dynamo以支持动态形状
@@ -1429,11 +1312,9 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             torch._dynamo.mark_dynamic(input_ids, 0)
         torch._dynamo.mark_dynamic(position_ids, 0)
         torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.block_tables, (0, 1))
-        torch._dynamo.mark_dynamic(attn_metadata.context_lens, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.token_to_seq_mapping, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.attention_mask, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.is_prefill_token, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
+        torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
 
         layer_names = get_layers_from_vllm_config(self.vllm_config, Attention).keys()
         per_layer_attn_metadata = {

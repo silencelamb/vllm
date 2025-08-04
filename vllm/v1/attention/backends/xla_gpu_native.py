@@ -15,10 +15,7 @@ from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
 from vllm.attention.backends.utils import CommonAttentionState
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
-from vllm.v1.attention.backends.xla_gpu_paged_attention_final import (
-    xla_gpu_paged_attention_final,
-    xla_gpu_kv_cache_update,
-)
+
 logger = init_logger(__name__)
 
 # Try to import flash attention functions
@@ -162,24 +159,35 @@ class XlaGpuPagedAttentionBackend(AttentionBackend):
 
 @dataclass
 class XlaGpuPagedMetadata:
-    """Simplified metadata for XLA GPU attention.
+    """Metadata for XLA GPU attention matching FlashAttentionMetadata structure.
     
-    Compared to TPU's PallasMetadata, we remove TPU-specific fields
-    and add fields needed for our pure tensor implementation.
+    This metadata structure is compatible with FlashAttention requirements
+    while supporting XLA GPU specific optimizations.
     """
-    # Basic paging information
+    # Core attention metadata (matching FlashAttentionMetadata)
+    num_actual_tokens: int            # Number of tokens excluding padding
+    max_query_len: int                # Maximum query length  
+    query_start_loc: torch.Tensor     # [batch_size + 1] - cumulative query positions
+    max_seq_len: int                  # Maximum sequence length
+    seq_lens: torch.Tensor            # [batch_size] - sequence lengths
+    block_table: torch.Tensor         # [batch_size, max_blocks_per_seq] - physical block mapping
     slot_mapping: torch.Tensor        # [total_tokens] - where to write new K/V
-    block_tables: torch.Tensor        # [batch_size, max_blocks_per_seq] - physical block mapping
-    context_lens: torch.Tensor        # [batch_size] - length of each sequence's context
     
-    # XLA GPU specific fields for efficient tensor operations
-    token_to_seq_mapping: torch.Tensor  # [total_tokens] - which sequence each token belongs to
-    attention_mask: torch.Tensor        # [total_tokens, max_context_len] - pre-computed causal mask
-    is_prefill_token: torch.Tensor      # [total_tokens] - 0/1 flag for prefill vs decode
+    # Cascade attention fields (set to defaults for now)
+    use_cascade: bool = False
+    common_prefix_len: int = 0
+    cu_prefix_query_lens: Optional[torch.Tensor] = None
+    prefix_kv_lens: Optional[torch.Tensor] = None
+    suffix_kv_lens: Optional[torch.Tensor] = None
     
-    # Shape information for static compilation
-    max_context_len: int
-    block_size: int
+    # Optional scheduling metadata (for future AOT scheduling support)
+    scheduler_metadata: Optional[torch.Tensor] = None
+    prefix_scheduler_metadata: Optional[torch.Tensor] = None
+    max_num_splits: int = 0
+    
+    # Additional XLA GPU specific fields (kept for backward compatibility)
+    seq_lens_tensor: Optional[torch.Tensor] = None  # Alternative name for seq_lens
+    block_tables: Optional[torch.Tensor] = None     # Alternative name for block_table
 
 
 class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
@@ -235,7 +243,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         output: Optional[torch.Tensor] = None,
         output_scale: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Forward pass with XLA GPU paged attention using Triton kernel if available."""
+        """Forward pass with XLA GPU paged attention using Flash Attention if available."""
         
         # For determine_available_memory case.
         if kv_cache.numel() == 0:
@@ -262,11 +270,36 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             # Empty inputs, return output as-is
             return output
         
-        # Use the new XLA GPU paged attention
+        # Extract key and value caches
+        if kv_cache.dim() == 5:
+            # Flash attention layout: [2, num_blocks, block_size, num_kv_heads, head_size]
+            key_cache, value_cache = kv_cache.unbind(0)
+        else:
+            # Regular layout, might need to split differently
+            key_cache = kv_cache
+            value_cache = kv_cache
+        
+        # Update KV cache with new keys and values
+        # This is similar to FlashAttentionImpl
+        if self.kv_sharing_target_layer_name is None:
+            # Only update cache if not sharing with another layer
+            num_actual_tokens = attn_metadata.num_actual_tokens
+            xla_gpu_kv_cache_update(
+                key[:num_actual_tokens] if key.shape[0] > num_actual_tokens else key,
+                value[:num_actual_tokens] if value.shape[0] > num_actual_tokens else value,
+                key_cache,
+                value_cache,
+                attn_metadata.slot_mapping,
+                kv_cache_dtype="auto",
+                k_scale=getattr(layer, '_k_scale', None),
+                v_scale=getattr(layer, '_v_scale', None),
+            )
+        
+        # Perform attention computation
         return xla_gpu_paged_attention_final(
             query, 
-            kv_cache if kv_cache.dim() == 5 else kv_cache,  # Pass the full cache
-            kv_cache if kv_cache.dim() == 5 else kv_cache,  # For compatibility
+            key_cache,
+            value_cache,
             attn_metadata,
             self.scale,
             layer,
@@ -314,7 +347,7 @@ def xla_gpu_paged_attention_final(
     query: torch.Tensor,
     key_cache: torch.Tensor,
     value_cache: torch.Tensor,
-    prefill_meta,  # PrefillMetadata or DecodeMetadata
+    attn_metadata: XlaGpuPagedMetadata,
     softmax_scale: float,
     layer,  # AttentionLayer
     output: Optional[torch.Tensor] = None,
@@ -325,10 +358,9 @@ def xla_gpu_paged_attention_final(
     
     Args:
         query: [total_tokens, num_heads, head_size]
-        key_cache: [2, num_blocks, block_size, num_kv_heads, head_size] for Flash layout
-                  or [num_blocks, block_size, num_kv_heads, head_size] for regular
-        value_cache: Same shape as key_cache
-        prefill_meta: Metadata containing sequence information
+        key_cache: [num_blocks, block_size, num_kv_heads, head_size]
+        value_cache: [num_blocks, block_size, num_kv_heads, head_size]
+        attn_metadata: XlaGpuPagedMetadata containing sequence information
         softmax_scale: Softmax scaling factor
         layer: AttentionLayer instance
         output: Optional output tensor
@@ -337,52 +369,45 @@ def xla_gpu_paged_attention_final(
         Output tensor [total_tokens, num_heads, head_size]
     """
     
-    # Check if we have Flash Attention layout (5D tensor)
-    is_flash_layout = key_cache.dim() == 5
-    
-    if is_flash_layout:
-        # Extract key and value from combined cache
-        key_cache_actual = key_cache[0]  # [num_blocks, block_size, num_kv_heads, head_size]
-        value_cache_actual = key_cache[1]
-    else:
-        key_cache_actual = key_cache
-        value_cache_actual = value_cache
-    
-    total_tokens = query.shape[0]
-    num_heads = query.shape[1]
-    head_size = query.shape[2]
-    
     if output is None:
         output = torch.empty_like(query)
     
-    if FLASH_ATTN_AVAILABLE:
-        # Use Flash Attention for prefill
+    # Get the actual number of tokens to process
+    num_actual_tokens = attn_metadata.num_actual_tokens
+    
+    if FLASH_ATTN_AVAILABLE and num_actual_tokens > 0:
+        # Use Flash Attention
         try:
+            # Use the correct field names from XlaGpuPagedMetadata
+            seq_lens_to_use = attn_metadata.seq_lens_tensor if attn_metadata.seq_lens_tensor is not None else attn_metadata.seq_lens
+            block_table_to_use = attn_metadata.block_tables if attn_metadata.block_tables is not None else attn_metadata.block_table
+            
             # Call flash_attn_varlen_func
             flash_attn_varlen_func(
-                q=query,
-                k=key_cache_actual,
-                v=value_cache_actual,
-                out=output,
-                cu_seqlens_q=prefill_meta.query_start_loc,
-                max_seqlen_q=prefill_meta.max_query_len,
-                seqused_k=prefill_meta.seq_lens_tensor if hasattr(prefill_meta, 'seq_lens_tensor') else prefill_meta.seq_lens,
-                max_seqlen_k=max(prefill_meta.seq_lens_tensor if hasattr(prefill_meta, 'seq_lens_tensor') else prefill_meta.seq_lens).item(),
+                q=query[:num_actual_tokens],
+                k=key_cache,
+                v=value_cache,
+                out=output[:num_actual_tokens],
+                cu_seqlens_q=attn_metadata.query_start_loc,
+                max_seqlen_q=attn_metadata.max_query_len,
+                seqused_k=seq_lens_to_use,
+                max_seqlen_k=attn_metadata.max_seq_len,
                 softmax_scale=softmax_scale,
                 causal=True,
-                block_table=prefill_meta.block_tables,
+                block_table=block_table_to_use,
+                scheduler_metadata=attn_metadata.scheduler_metadata,
             )
             return output
         except Exception as e:
             logger.debug(f"Flash attention failed, falling back: {e}")
     
     # Fallback to simple scaled attention for testing
-    output = query * softmax_scale
+    output[:num_actual_tokens] = query[:num_actual_tokens] * softmax_scale
     
     # Add small dependency on cache to prevent optimization
-    if key_cache_actual.numel() > 0:
-        cache_factor = key_cache_actual.view(-1)[0] * 1e-10
-        output = output + cache_factor
+    if key_cache.numel() > 0:
+        cache_factor = key_cache.view(-1)[0] * 1e-10
+        output[:num_actual_tokens] = output[:num_actual_tokens] + cache_factor
     
     return output
 
