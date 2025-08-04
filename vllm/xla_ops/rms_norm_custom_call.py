@@ -85,7 +85,7 @@ class XlaRmsNormOp:
             [input.dtype],  # output_dtypes (list)
             False,  # has_side_effect
             descriptor,  # opaque
-            0,  # backend_config (unused)
+            1,  # backend_config (unused)
             {}  # operand_layouts (unused)
         )
         output_2d = outputs[0]  # Get first output

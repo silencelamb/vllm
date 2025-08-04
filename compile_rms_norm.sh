@@ -22,7 +22,8 @@ if [ ! -f "$CUDA_FILE" ]; then
 fi
 
 # Compile the CUDA file (pure CUDA, no PyTorch headers needed)
-nvcc -O3 -shared -fPIC \
+
+nvcc -O2 -shared -Xcompiler -fPIC \
     -gencode arch=compute_70,code=sm_70 \
     -gencode arch=compute_75,code=sm_75 \
     -gencode arch=compute_80,code=sm_80 \

@@ -1,8 +1,8 @@
 // Simplified XLA Custom Call wrapper for vLLM rms_norm
 // This version creates a minimal wrapper that can be extended later
 
-#include <torch/extension.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <torch/all.h>
 #include <cstdint>
 #include <cstring>
 #include <cuda_runtime.h>
