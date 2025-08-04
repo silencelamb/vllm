@@ -129,7 +129,7 @@ def create_custom_op_with_cuda():
         # For XLA, we have two options:
         
         # Option 1: Use regular ops (works immediately)
-        return a + b
+        return cuda_ext.simple_add_cuda(a, b)
         
         # Option 2: Try to use custom call (requires XLA runtime registration)
         # Uncomment to test:
@@ -148,7 +148,7 @@ def create_custom_op_with_cuda():
         # return result
     
     # Meta implementation
-    @torch.library.impl_abstract("xla_gpu_cuda::simple_add")
+    @torch.library.register_fake("xla_gpu_cuda::simple_add")
     def simple_add_meta(a, b):
         return torch.empty_like(a)
     
