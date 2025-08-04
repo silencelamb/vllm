@@ -12,7 +12,10 @@ from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
 from vllm.attention.backends.utils import CommonAttentionState
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
-from vllm.v1.attention.backends.xla_gpu_paged_attention_final import xla_gpu_paged_attention_final as xla_gpu_paged_attention
+from vllm.v1.attention.backends.xla_gpu_paged_attention_final import (
+    xla_gpu_paged_attention_final,
+    xla_gpu_kv_cache_update,
+)
 
 logger = init_logger(__name__)
 
@@ -255,16 +258,35 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         
         # Update KV cache first
         if self.kv_sharing_target_layer_name is None:
-            # Use XLA-compatible update for now
-            # TODO: Enable Triton KV cache update once XLA triton compilation is fixed
-            self._update_kv_cache_xla(key, value, kv_cache, attn_metadata, layer)
+            # Use the new XLA GPU KV cache update
+            if kv_cache.dim() == 5:  # Flash layout [2, num_blocks, ...]
+                key_cache = kv_cache[0]
+                value_cache = kv_cache[1]
+            else:
+                # Assume separate key and value caches
+                key_cache = kv_cache
+                value_cache = kv_cache
+            
+            xla_gpu_kv_cache_update(
+                key, value,
+                key_cache,
+                value_cache,
+                attn_metadata.slot_mapping,
+                "auto",  # kv_cache_dtype
+                layer._k_scale if hasattr(layer, '_k_scale') else None,
+                layer._v_scale if hasattr(layer, '_v_scale') else None,
+            )
         
-        # Currently, XLA Triton integration has issues with torch.compile
-        # Fall back to PyTorch implementation which is XLA-compatible
-        # TODO: Enable Triton support once XLA Triton supports torch.compile
-        
-        # Fallback to PyTorch implementation
-        return self._forward_pytorch(query, key, value, kv_cache, attn_metadata, output)
+        # Use the new XLA GPU paged attention
+        return xla_gpu_paged_attention_final(
+            query, 
+            kv_cache if kv_cache.dim() == 5 else kv_cache,  # Pass the full cache
+            kv_cache if kv_cache.dim() == 5 else kv_cache,  # For compatibility
+            attn_metadata,
+            self.scale,
+            layer,
+            output,
+        )
     
     def _forward_triton_xla(
         self,
@@ -466,7 +488,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         key: torch.Tensor,          # [total_tokens, num_kv_heads, head_size]
         value: torch.Tensor,        # [total_tokens, num_kv_heads, head_size]
         kv_cache: torch.Tensor,     # [2, num_blocks, block_size, num_kv_heads, head_size]
-        attn_metadata: XlaGpuPagedMetadata,
+        attn_metadata,              # Can be PrefillMeta or DecodeMeta
         layer: AttentionLayer,
     ) -> None:
         """XLA-compatible KV cache update using simple operations.

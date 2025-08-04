@@ -37,15 +37,40 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
 - @vllm/v1/attention/backends/xla_gpu_native.py: 实现了XLA GPU的注意力机制，支持Pagedattention，XLA编译友好，目前核心报错是关于动态形状的编译问题，如果解决了这个问题，应该就可以正常运行了
 - @vllm/platforms/xla_gpu.py: 实现了XLA GPU KV缓存管理  
 - @tests/xla_gpu/test_compilation.py: 测试用例，测试XLA GPU编译和执行
-- @tests/xla_gpu/test_debug_custom_call.py: 是一个通过torch xla提供的custom call注册
+- @tests/xla_gpu/test_debug_custom_call.py: 是一个通过torch xla提供的custom call注册custom op的测试用例和示例，主要是为了测试XLA GPU的custom op注册和执行的例子，目前是一个简单的加法算子，后续可以扩展为更复杂的算子。
+- @tests/xla_gpu/test_torch_compile_custom_call.py: 是1个示例，torch xla注册的custom op可以很好的和torch.compiple(backend='openxla')兼容，目前是一个简单的加法算子，后续可以扩展为更复杂的算子。
 
 ## 后续工作
 
-解决动态形状编译问题，确保XLA GPU支持的完整性和性能。后续工作包括：
+后续工作包括：
 
-1. 利用新增custom os的手段，类似于TPU的torch.ops.xla.ragged_paged_attention
-   - 只需要实现这个算子的定义，能够正常抓图就行
-   - 算子的实际执行可以只简单return 1个shape正确的tensor即可
+1. 利用新增custom os的手段，实现1个XLA GPU的PagedAttention算子
+   - 这个算子的功能就是调用flash-attention
+           flash_attn_varlen_func(
+            q=query,
+            k=key_cache, v=value_cache,      # 使用缓存
+            cu_seqlens_q=prefill_meta.query_start_loc,
+            max_seqlen_q=prefill_meta.max_query_len,
+            seqused_k=prefill_meta.seq_lens_tensor,  # 实际使用的K长度
+            max_seqlen_k=max_seq_len,
+            softmax_scale=softmax_scale,
+            causal=True,                     # 前缀缓存总是因果的
+            block_table=prefill_meta.block_tables,  # 分页表
+            out=prefill_output
+        )
+        算子的forward会调用reshape_and_cache_flash
+        reshape_and_cache_flash(
+                key,
+                value,
+                key_cache,
+                value_cache,
+                attn_metadata.slot_mapping,
+                self.kv_cache_dtype,
+                layer._k_scale,
+                layer._v_scale,
+            )
+   - 因此@vllm/v1/worker/xla_gpu_model_runner.py需要完全跟这个算子对接，主要是_prepare_inputs对接好这个算子。可以参考@vllm/v1/worker/gpu_model_runner.py的_prepare_inputs方法。
+   - 另外，需要确保在XlaGpuWorker中正确处理请求，以便与新的PagedAttention算子兼容。
 
 ## 规范说明
 

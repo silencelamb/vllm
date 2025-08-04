@@ -828,20 +828,57 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         logger.debug(f"attention_mask shape: {attention_mask.shape}")
         logger.debug(f"is_prefill_token shape: {is_prefill_token.shape}")
         
-        # Create XlaGpuPagedMetadata with all required fields
-        attn_metadata = XlaGpuPagedMetadata(
-            # Original fields
-            slot_mapping=slot_mapping,
-            block_tables=block_tables,
-            context_lens=seq_lens,
-            
-            # New fields
-            token_to_seq_mapping=token_to_seq_mapping,
-            attention_mask=attention_mask,
-            is_prefill_token=is_prefill_token,
-            max_context_len=max_context_len,
-            block_size=self.block_size,
+        # Create metadata suitable for Flash Attention
+        # We need to prepare data in the format that flash_attn_varlen_func expects
+        
+        # Prepare query_start_loc for Flash Attention (cumulative sequence lengths)
+        # This is different from the query_start_loc we use for logits
+        flash_query_start_loc = torch.zeros(num_reqs + 1, dtype=torch.int32, device=self.device)
+        flash_query_start_loc[1:num_reqs + 1] = torch.cumsum(
+            torch.tensor(num_scheduled_tokens_per_req, dtype=torch.int32, device=self.device), dim=0
         )
+        
+        # Prepare sequence lengths tensor (actual key lengths per sequence)
+        seq_lens_tensor = torch.tensor(
+            self.seq_lens_np[:num_reqs], dtype=torch.int32, device=self.device
+        )
+        
+        # For prefill, we need to distinguish prefill vs decode metadata
+        # Check if this is a prefill batch (any request has num_computed_tokens == 0)
+        is_prefill_batch = any(
+            self.requests[self.input_batch.req_ids[i]].num_computed_tokens == 0
+            for i in range(num_reqs)
+        )
+        
+        if is_prefill_batch:
+            # Create PrefillMetadata-like object
+            from collections import namedtuple
+            PrefillMeta = namedtuple('PrefillMeta', [
+                'query_start_loc', 'max_query_len', 'seq_lens_tensor',
+                'seq_lens', 'block_tables', 'slot_mapping'
+            ])
+            
+            attn_metadata = PrefillMeta(
+                query_start_loc=flash_query_start_loc,
+                max_query_len=max_num_scheduled_tokens_all_reqs,
+                seq_lens_tensor=seq_lens_tensor,
+                seq_lens=seq_lens,
+                block_tables=block_tables,
+                slot_mapping=slot_mapping,
+            )
+        else:
+            # Create DecodeMeta-like object for decode phase
+            from collections import namedtuple
+            DecodeMeta = namedtuple('DecodeMeta', [
+                'seq_lens_tensor', 'seq_lens', 'block_tables', 'slot_mapping'
+            ])
+            
+            attn_metadata = DecodeMeta(
+                seq_lens_tensor=seq_lens_tensor,
+                seq_lens=seq_lens,
+                block_tables=block_tables,
+                slot_mapping=slot_mapping,
+            )
         
         # Add debug logging
         import os
