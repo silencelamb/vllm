@@ -1,12 +1,14 @@
 // XLA Custom Call wrapper for vLLM rms_norm CUDA kernel
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAStream.h>
 #include <cstdint>
 #include <cstring>
 
 // Forward declaration of the existing vLLM rms_norm function
-void rms_norm(torch::Tensor& out, torch::Tensor& input, 
-              torch::Tensor& weight, double epsilon);
+// This is defined in vllm._C module (already compiled)
+extern "C" void rms_norm(torch::Tensor& out, torch::Tensor& input, 
+                        torch::Tensor& weight, double epsilon);
 
 // XLA Custom Call descriptor structure
 struct RmsNormDescriptor {
@@ -66,8 +68,8 @@ void rms_norm_xla_custom_call(
       options);
   
   // Set the CUDA stream
-  c10::cuda::CUDAStreamGuard guard(
-      c10::cuda::getStreamFromExternal(stream, c10::DeviceIndex(0)));
+  at::cuda::CUDAStreamGuard guard(
+      at::cuda::getStreamFromExternal(stream, c10::DeviceIndex(0)));
   
   // Call the existing vLLM rms_norm kernel
   rms_norm(output, input, weight, descriptor.epsilon);
