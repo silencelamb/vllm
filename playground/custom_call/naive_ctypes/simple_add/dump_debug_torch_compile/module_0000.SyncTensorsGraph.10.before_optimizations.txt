@@ -1,0 +1,14 @@
+HloModule SyncTensorsGraph.10, entry_computation_layout={(f32[], f32[3]{0}, f32[3]{0})->(f32[3]{0})}
+
+ENTRY %SyncTensorsGraph.10 (p0.1: f32[], p1.2: f32[3], p2.3: f32[3]) -> (f32[3]) {
+  %p2.3 = f32[3]{0} parameter(2), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=728}
+  %p0.1 = f32[] parameter(0), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.4 = f32[3]{0} broadcast(f32[] %p0.1), dimensions={}, metadata={op_type="aten__mul" op_name="aten__mul.3/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.5 = f32[3]{0} multiply(f32[3]{0} %p2.3, f32[3]{0} %broadcast.4), metadata={op_type="aten__mul" op_name="aten__mul.3/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %p1.2 = f32[3]{0} parameter(1), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=728}
+  %custom-call.6 = f32[3] custom-call(f32[3]{0} %multiply.5, f32[3]{0} %p1.2), custom_call_target="XlaGpuSimpleAdd", metadata={op_type="xla__custom_call" op_name="xla__custom_call" source_file="/code/github_code/xla_vllm/vllm/playground/custom_call/naive_ctypes/simple_add/test_torch_compile_custom_call.py" source_line=154}
+  %broadcast.7 = f32[3]{0} broadcast(f32[] %p0.1), dimensions={}, metadata={op_type="aten__div" op_name="aten__div" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %divide.8 = f32[3]{0} divide(f32[3] %custom-call.6, f32[3]{0} %broadcast.7), metadata={op_type="aten__div" op_name="aten__div" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  ROOT %tuple.9 = (f32[3]{0}) tuple(f32[3]{0} %divide.8)
+}
+

@@ -1,0 +1,86 @@
+BufferAssignment:
+allocation 0: size 12, maybe-live-out:
+ value: <10 loop_multiply_fusion @0> (size=12,offset=0): f32[3]{0}
+ value: <13 loop_divide_fusion @0> (size=12,offset=0): f32[3]{0}
+allocation 1: size 12, parameter 2, shape |f32[3]| at ShapeIndex {}:
+ value: <8 p2.3.0 @0> (size=12,offset=0): f32[3]{0}
+allocation 2: size 12, parameter 1, shape |f32[3]| at ShapeIndex {}:
+ value: <11 p1.2.0 @0> (size=12,offset=0): f32[3]{0}
+allocation 3: size 8, output shape is |(f32[3])|, maybe-live-out:
+ value: <14 tuple.9.0{} @0> (size=8,offset=0): (f32[3]{0})
+allocation 4: size 4, parameter 0, shape |f32[]| at ShapeIndex {}:
+ value: <9 p0.1.0 @0> (size=4,offset=0): f32[]
+allocation 5: size 12, preallocated-temp:
+ value: <12 custom-call.6.0 @0> (size=12,offset=0): f32[3]{0}
+
+Total bytes used: 60 (60B)
+
+Used values:
+<8 p2.3.0 @0>
+ positions:
+  p2.3.0
+ uses:
+  loop_multiply_fusion, operand 0
+ from instruction: %p2.3.0 = f32[3]{0} parameter(2), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=728}
+<9 p0.1.0 @0>
+ positions:
+  p0.1.0
+ uses:
+  loop_multiply_fusion, operand 1
+  loop_divide_fusion, operand 1
+ from instruction: %p0.1.0 = f32[] parameter(0), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<10 loop_multiply_fusion @0>
+ positions:
+  loop_multiply_fusion
+ uses:
+  custom-call.6.0, operand 0
+ from instruction: %loop_multiply_fusion = f32[3]{0} fusion(f32[3]{0} %p2.3.0, f32[] %p0.1.0), kind=kLoop, calls=%fused_multiply, metadata={op_type="aten__mul" op_name="aten__mul.3/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<11 p1.2.0 @0>
+ positions:
+  p1.2.0
+ uses:
+  custom-call.6.0, operand 1
+ from instruction: %p1.2.0 = f32[3]{0} parameter(1), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=728}
+<12 custom-call.6.0 @0>
+ positions:
+  custom-call.6.0
+ uses:
+  loop_divide_fusion, operand 0
+ from instruction: %custom-call.6.0 = f32[3]{0} custom-call(f32[3]{0} %loop_multiply_fusion, f32[3]{0} %p1.2.0), custom_call_target="XlaGpuSimpleAdd", metadata={op_type="xla__custom_call" op_name="xla__custom_call" source_file="/code/github_code/xla_vllm/vllm/playground/custom_call/naive_ctypes/simple_add/test_torch_compile_custom_call.py" source_line=154}
+<13 loop_divide_fusion @0>
+ positions:
+  loop_divide_fusion
+  tuple.9.0 {0}
+ uses:
+  tuple.9.0, operand 0
+ from instruction: %loop_divide_fusion = f32[3]{0} fusion(f32[3]{0} %custom-call.6.0, f32[] %p0.1.0), kind=kLoop, calls=%fused_divide, metadata={op_type="aten__div" op_name="aten__div" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<14 tuple.9.0{} @0>
+ positions:
+  tuple.9.0 {}
+ uses:
+ from instruction: %tuple.9.0 = (f32[3]{0}) tuple(f32[3]{0} %loop_divide_fusion)
+
+
+HloLiveRange (max 7):
+  InstructionSequence:
+    0:p0.1.0
+    1:p2.3.0
+    2:p1.2.0
+    3:loop_multiply_fusion
+    4:custom-call.6.0
+    5:loop_divide_fusion
+    6:tuple.9.0
+  BufferLiveRange:
+    p2.3.0{}:0-7
+    p0.1.0{}:0-7
+    loop_multiply_fusion{}:3-4
+    p1.2.0{}:0-7
+    custom-call.6.0{}:4-5
+    loop_divide_fusion{}:5-7
+    tuple.9.0{}:6-7
+  Live ranges at 5 (peak):
+    p2.3.0: 12 bytes
+    p0.1.0: 4 bytes
+    p1.2.0: 12 bytes
+    custom-call.6.0: 12 bytes
+    loop_divide_fusion: 12 bytes
