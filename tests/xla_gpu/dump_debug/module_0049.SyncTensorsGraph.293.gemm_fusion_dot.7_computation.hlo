@@ -1,9 +1,0 @@
-%gemm_fusion_dot.7_computation (parameter_0: bf16[1024,2048], parameter_1: bf16[1024,2048]) -> bf16[16,2048] {
-  %parameter_0 = bf16[1024,2048]{1,0} parameter(0)
-  %parameter_1 = bf16[1024,2048]{1,0} parameter(1)
-  %concatenate.5 = bf16[2048,2048]{1,0} concatenate(bf16[1024,2048]{1,0} %parameter_0, bf16[1024,2048]{1,0} %parameter_1), dimensions={0}, metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
-  %constant_32 = bf16[] constant(0), metadata={op_type="aten__expand" op_name="aten__expand" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
-  %broadcast.36 = bf16[16,2048]{1,0} broadcast(bf16[] %constant_32), dimensions={}, metadata={op_type="aten__expand" op_name="aten__expand" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
-  %dot.9 = bf16[2048,16]{0,1} dot(bf16[2048,2048]{1,0} %concatenate.5, bf16[16,2048]{1,0} %broadcast.36), lhs_contracting_dims={1}, rhs_contracting_dims={1}, metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
-  ROOT %bitcast.295 = bf16[16,2048]{1,0} bitcast(bf16[2048,16]{0,1} %dot.9), metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
-}
