@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Optional, Tuple, Union
 import os
 import ctypes
 
@@ -39,34 +39,49 @@ try:
     # Now register custom ops for XLA GPU to handle fake tensors properly
     # These wrap the Flash Attention functions with fake implementations for torch.compile
     
-    def xla_reshape_and_cache_flash_wrapper(key, value, key_cache, value_cache, 
-                                           slot_mapping, kv_cache_dtype, k_scale, v_scale):
+    def xla_reshape_and_cache_flash_wrapper(
+        key: torch.Tensor,
+        value: torch.Tensor,
+        key_cache: torch.Tensor,
+        value_cache: torch.Tensor,
+        slot_mapping: torch.Tensor,
+        kv_cache_dtype: str,
+        k_scale: Optional[torch.Tensor],
+        v_scale: Optional[torch.Tensor]
+    ) -> None:
         """Wrapper that calls the original reshape_and_cache_flash"""
         _reshape_and_cache_flash_orig(key, value, key_cache, value_cache,
                                      slot_mapping, kv_cache_dtype, k_scale, v_scale)
     
-    def xla_reshape_and_cache_flash_fake(key, value, key_cache, value_cache, 
-                                        slot_mapping, kv_cache_dtype, k_scale, v_scale):
+    def xla_reshape_and_cache_flash_fake(
+        key: torch.Tensor,
+        value: torch.Tensor,
+        key_cache: torch.Tensor,
+        value_cache: torch.Tensor,
+        slot_mapping: torch.Tensor,
+        kv_cache_dtype: str,
+        k_scale: Optional[torch.Tensor],
+        v_scale: Optional[torch.Tensor]
+    ) -> None:
         """Fake implementation for torch.compile - mutates cache tensors in place"""
         # No return value, this is an in-place operation
         pass
     
-    def xla_flash_attn_wrapper(**kwargs):
+    def xla_flash_attn_wrapper(
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        out: torch.Tensor,
+        cu_seqlens_q: torch.Tensor,
+        max_seqlen_q: int,
+        seqused_k: torch.Tensor,
+        max_seqlen_k: int,
+        softmax_scale: float,
+        causal: bool = True,
+        block_table: Optional[torch.Tensor] = None,
+        scheduler_metadata: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Wrapper that calls the original flash_attn_varlen_func"""
-        # Extract the arguments we need
-        q = kwargs.get('q')
-        k = kwargs.get('k')
-        v = kwargs.get('v')
-        out = kwargs.get('out')
-        cu_seqlens_q = kwargs.get('cu_seqlens_q')
-        max_seqlen_q = kwargs.get('max_seqlen_q')
-        seqused_k = kwargs.get('seqused_k')
-        max_seqlen_k = kwargs.get('max_seqlen_k')
-        softmax_scale = kwargs.get('softmax_scale')
-        causal = kwargs.get('causal', True)
-        block_table = kwargs.get('block_table', None)
-        scheduler_metadata = kwargs.get('scheduler_metadata', None)
-        
         # Call the original function
         return _flash_attn_varlen_func_orig(
             q=q, k=k, v=v, out=out,
@@ -80,9 +95,21 @@ try:
             scheduler_metadata=scheduler_metadata,
         )
     
-    def xla_flash_attn_fake(**kwargs):
+    def xla_flash_attn_fake(
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        out: torch.Tensor,
+        cu_seqlens_q: torch.Tensor,
+        max_seqlen_q: int,
+        seqused_k: torch.Tensor,
+        max_seqlen_k: int,
+        softmax_scale: float,
+        causal: bool = True,
+        block_table: Optional[torch.Tensor] = None,
+        scheduler_metadata: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Fake implementation for torch.compile"""
-        out = kwargs.get('out')
         # Return (output, lse) tuple - lse is None for fake implementation
         return out, None
     
@@ -474,18 +501,18 @@ def xla_gpu_paged_attention_final(
             # Call our registered custom op which handles fake tensors properly
             # Flash Attention returns (output, lse) tuple, but output is modified in-place
             _, _ = torch.ops.vllm.xla_flash_attn_varlen_func(
-                q=query[:num_actual_tokens],
-                k=key_cache,
-                v=value_cache,
-                out=output[:num_actual_tokens],
-                cu_seqlens_q=attn_metadata.query_start_loc,
-                max_seqlen_q=attn_metadata.max_query_len,
-                seqused_k=seq_lens_to_use,
-                max_seqlen_k=attn_metadata.max_seq_len,
-                softmax_scale=softmax_scale,
-                causal=True,
-                block_table=block_table_to_use,
-                scheduler_metadata=attn_metadata.scheduler_metadata,
+                query[:num_actual_tokens],  # q
+                key_cache,  # k
+                value_cache,  # v
+                output[:num_actual_tokens],  # out
+                attn_metadata.query_start_loc,  # cu_seqlens_q
+                attn_metadata.max_query_len,  # max_seqlen_q
+                seq_lens_to_use,  # seqused_k
+                attn_metadata.max_seq_len,  # max_seqlen_k
+                softmax_scale,  # softmax_scale
+                True,  # causal
+                block_table_to_use,  # block_table
+                attn_metadata.scheduler_metadata,  # scheduler_metadata
             )
             return output
         except Exception as e:
