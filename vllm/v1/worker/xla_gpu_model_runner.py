@@ -687,7 +687,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # Calculate the slot mapping for XLA GPU
         # XLA GPU uses a simple 1D slot mapping instead of the complex 3D mapping used by TPU
         slot_mapping = torch.zeros(padded_total_num_scheduled_tokens,
-                                  dtype=torch.int32, device=self.device)
+                                  dtype=torch.int64, device=self.device)
         
         # Fill in slot indices for scheduled tokens
         token_idx = 0
@@ -1361,7 +1361,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
                                             dtype=torch.int32).to(self.device)
         # XLA GPU uses 1D slot mapping, not 3D like TPU
         slot_mapping = torch.zeros(MAX_TOKENS,
-                                dtype=torch.int32).to(self.device)
+                                dtype=torch.int64).to(self.device)
         block_tables = torch.zeros((MAX_REQS, MAX_BLOCKS),
                                 dtype=torch.int32).to(self.device)
         
