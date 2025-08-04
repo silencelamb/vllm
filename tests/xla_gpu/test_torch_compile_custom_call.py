@@ -107,6 +107,8 @@ def test_torch_compile_with_custom_op():
         b = torch.tensor([4.0, 5.0, 6.0]).to(device)
         
         result = my_function(a, b)
+        ir1 = torch_xla._XLAC._get_xla_tensors_hlo([result])
+        print("IR:", ir1)
         xm.mark_step()
         xm.wait_device_ops()
         print(f"✅ Direct custom op result: {result}")
@@ -120,6 +122,8 @@ def test_torch_compile_with_custom_op():
         compiled_fn = torch.compile(my_function, backend='openxla')
         
         result = compiled_fn(a, b)
+        ir1 = torch_xla._XLAC._get_xla_tensors_text([result])
+        print("IR:", ir1)
         xm.mark_step()
         xm.wait_device_ops()
         print(f"✅ Compiled result: {result}")
@@ -135,12 +139,11 @@ def test_torch_compile_with_custom_op():
 
 
 
-def test_fallback_behavior():
+def test_mixed_function():
     """Test how torch.compile handles unsupported ops."""
-    print("\n4. Testing Fallback Behavior")
+    print("\n4. Testing Mixed Function with Custom Op")
     print("=" * 60)
 
-    
     # Define a custom op using torch.library
     lib = torch.library.Library("custom_xla", "DEF")
     lib.define("gpu_add(Tensor a, Tensor b) -> Tensor")
@@ -159,18 +162,21 @@ def test_fallback_behavior():
             {}
         )[0]
     
-    
     # CPU fallback (for comparison)
     @torch.library.impl(lib, "gpu_add", "CPU")
     def gpu_add_cpu(a, b):
         return a + b
+    
+    # Abstract implementation
+    @torch.library.register_fake("custom_xla::gpu_add")
+    def gpu_add_meta(a, b):
+        return torch.empty_like(a)
     
     # Create a function that mixes standard ops with custom ops
     def mixed_function(x, y):
         # Standard operation
         z = x * 2
         result = torch.ops.custom_xla.gpu_add(z, y)
-
         return result / 2
     
     try:
@@ -181,6 +187,13 @@ def test_fallback_behavior():
         b = torch.tensor([4.0, 5.0, 6.0]).to(device)
         
         result = compiled_fn(a, b)
+        ir1 = torch_xla._XLAC._get_xla_tensors_hlo([result])
+        ir2 = torch_xla._XLAC._get_xla_tensors_text([result])
+        print("IR:", ir1)
+        print("IR:", ir2)
+        xm.mark_step()
+        xm.wait_device_ops()
+
         print(f"✅ Mixed function result: {result}")
         
         # Expected: ((a * 2) + b) / 2 = (a + b/2)
@@ -202,9 +215,9 @@ def main():
         return
     
     # Run tests
-    test_direct_xla()
-    test_torch_compile_with_custom_op()
-    test_fallback_behavior()
+    # test_direct_xla()
+    # test_torch_compile_with_custom_op()
+    test_mixed_function()
     
     print("\n" + "=" * 80)
     print("\n📝 Key Points:")
