@@ -80,10 +80,14 @@ try:
         causal: bool = True,
         block_table: Optional[torch.Tensor] = None,
         scheduler_metadata: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        """Wrapper that calls the original flash_attn_varlen_func"""
-        # Call the original function
-        return _flash_attn_varlen_func_orig(
+    ) -> None:
+        """Wrapper that calls the original flash_attn_varlen_func
+        
+        Flash Attention modifies the output tensor in-place, so we don't
+        need to return anything. The LSE (log-sum-exp) output is ignored.
+        """
+        # Call the original function, ignore the return value
+        _flash_attn_varlen_func_orig(
             q=q, k=k, v=v, out=out,
             cu_seqlens_q=cu_seqlens_q,
             max_seqlen_q=max_seqlen_q,
@@ -108,10 +112,10 @@ try:
         causal: bool = True,
         block_table: Optional[torch.Tensor] = None,
         scheduler_metadata: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> None:
         """Fake implementation for torch.compile"""
-        # Return (output, lse) tuple - lse is None for fake implementation
-        return out, None
+        # Flash Attention modifies output in-place, no return value needed
+        pass
     
     # Register the custom ops for XLA GPU
     # XLA GPU platform uses "XLA" as dispatch key
@@ -499,8 +503,8 @@ def xla_gpu_paged_attention_final(
             block_table_to_use = attn_metadata.block_tables if attn_metadata.block_tables is not None else attn_metadata.block_table
             
             # Call our registered custom op which handles fake tensors properly
-            # Flash Attention returns (output, lse) tuple, but output is modified in-place
-            _, _ = torch.ops.vllm.xla_flash_attn_varlen_func(
+            # Flash Attention modifies output in-place
+            torch.ops.vllm.xla_flash_attn_varlen_func(
                 query[:num_actual_tokens],  # q
                 key_cache,  # k
                 value_cache,  # v
