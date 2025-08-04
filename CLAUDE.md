@@ -37,16 +37,13 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
 - @vllm/v1/attention/backends/xla_gpu_native.py: 实现了XLA GPU的注意力机制，支持Pagedattention，XLA编译友好，目前核心报错是关于动态形状的编译问题，如果解决了这个问题，应该就可以正常运行了
 - @vllm/platforms/xla_gpu.py: 实现了XLA GPU KV缓存管理  
 - @tests/xla_gpu/test_compilation.py: 测试用例，测试XLA GPU编译和执行
+- @tests/xla_gpu/test_debug_custom_call.py: 是一个通过torch xla提供的custom call注册
 
 ## 后续工作
 
 解决动态形状编译问题，确保XLA GPU支持的完整性和性能。后续工作包括：
 
-1. 利用torch的基础算子
-   - 使用torch的基础算子来实现XLA GPU的注意力机制，确保与XLA编译器兼容
-   - 解决动态形状处理问题，确保模型可以在不同输入形状下正常运行
-   - 如果有必要可以编写更具体的测试用例，逐个测试XlaGpuPagedAttentionBackendImpl的几个接口，测试其对XLA编译的支持
-2. 利用新增custom os的手段，类似于TPU的torch.ops.xla.ragged_paged_attention
+1. 利用新增custom os的手段，类似于TPU的torch.ops.xla.ragged_paged_attention
    - 只需要实现这个算子的定义，能够正常抓图就行
    - 算子的实际执行可以只简单return 1个shape正确的tensor即可
 

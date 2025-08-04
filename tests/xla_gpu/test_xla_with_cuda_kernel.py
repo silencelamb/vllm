@@ -92,11 +92,79 @@ def create_custom_op_with_cuda():
     # Load the CUDA extension
     print("\n1. Compiling CUDA kernel...")
     try:
+        # Create a simple C++ wrapper that declares the CUDA function
+        cpp_wrapper = '''
+        #include <torch/extension.h>
+        
+        // Forward declaration of CUDA function
+        torch::Tensor simple_add_cuda(torch::Tensor a, torch::Tensor b);
+        
+        PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+            m.def("simple_add_cuda", &simple_add_cuda, "Simple add CUDA kernel");
+        }
+        '''
+        
+        # CUDA implementation without PYBIND11_MODULE (will be in separate file)
+        cuda_impl = '''
+        #include <torch/extension.h>
+        #include <cuda_runtime.h>
+        
+        // Simple CUDA kernel
+        __global__ void simple_add_kernel(
+            const float* a,
+            const float* b,
+            float* out,
+            int size) {
+            
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx < size) {
+                out[idx] = a[idx] + b[idx];
+            }
+        }
+        
+        // Wrapper function callable from Python
+        torch::Tensor simple_add_cuda(
+            torch::Tensor a,
+            torch::Tensor b) {
+            
+            // Check inputs
+            TORCH_CHECK(a.is_cuda(), "a must be a CUDA tensor");
+            TORCH_CHECK(b.is_cuda(), "b must be a CUDA tensor");
+            TORCH_CHECK(a.sizes() == b.sizes(), "Tensors must have same shape");
+            TORCH_CHECK(a.scalar_type() == torch::ScalarType::Float, "Only float tensors supported");
+            
+            // Create output tensor
+            auto out = torch::empty_like(a);
+            
+            // Get size
+            int size = a.numel();
+            
+            // Launch kernel
+            const int threads = 256;
+            const int blocks = (size + threads - 1) / threads;
+            
+            simple_add_kernel<<<blocks, threads>>>(
+                a.data_ptr<float>(),
+                b.data_ptr<float>(),
+                out.data_ptr<float>(),
+                size
+            );
+            
+            // Check for errors
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                AT_ERROR("CUDA kernel failed: ", cudaGetErrorString(err));
+            }
+            
+            return out;
+        }
+        '''
+        
         # JIT compile the CUDA code
         cuda_ext = load_inline(
             name='simple_add_cuda_ext',
-            cpp_sources=[],
-            cuda_sources=[cuda_source],
+            cpp_sources=[cpp_wrapper],
+            cuda_sources=[cuda_impl],
             functions=['simple_add_cuda'],
             verbose=True,
             extra_cuda_cflags=['-O2']
