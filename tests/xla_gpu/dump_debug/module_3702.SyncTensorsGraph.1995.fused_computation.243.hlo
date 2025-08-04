@@ -1,0 +1,37 @@
+%fused_computation.243 (param_0.1021: f32[], param_1.832: bf16[64,1024], param_2.536: bf16[64,25600], param_3.503: bf16[1024], param_4.274: f32[64,1024], param_5.60: bf16[64,1024], param_6.46: bf16[64,1024]) -> bf16[64,1024] {
+  %param_2.536 = bf16[64,25600]{1,0} parameter(2)
+  %convert.1193.95 = f32[64,25600]{1,0} convert(bf16[64,25600]{1,0} %param_2.536), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %slice.328.5 = f32[64,1024]{1,0} slice(f32[64,25600]{1,0} %convert.1193.95), slice={[0:64], [7168:8192]}, metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_1.832 = bf16[64,1024]{1,0} parameter(1)
+  %convert.1437.3 = f32[64,1024]{1,0} convert(bf16[64,1024]{1,0} %param_1.832), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %slice.329.9 = f32[64,1024]{1,0} slice(f32[64,25600]{1,0} %convert.1193.95), slice={[0:64], [8192:9216]}, metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_6.46 = bf16[64,1024]{1,0} parameter(6)
+  %convert.1420.7 = f32[64,1024]{1,0} convert(bf16[64,1024]{1,0} %param_6.46), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %slice.330.13 = f32[64,1024]{1,0} slice(f32[64,25600]{1,0} %convert.1193.95), slice={[0:64], [9216:10240]}, metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_5.60 = bf16[64,1024]{1,0} parameter(5)
+  %convert.1405.11 = f32[64,1024]{1,0} convert(bf16[64,1024]{1,0} %param_5.60), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_4.274 = f32[64,1024]{1,0} parameter(4)
+  %add.376.11 = f32[64,1024]{1,0} add(f32[64,1024]{1,0} %convert.1405.11, f32[64,1024]{1,0} %param_4.274), metadata={op_type="aten__add" op_name="aten__add.1284/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.377.11 = f32[64,1024]{1,0} add(f32[64,1024]{1,0} %slice.330.13, f32[64,1024]{1,0} %add.376.11), metadata={op_type="aten__add" op_name="aten__add.1297/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.379.7 = f32[64,1024]{1,0} add(f32[64,1024]{1,0} %convert.1420.7, f32[64,1024]{1,0} %add.377.11), metadata={op_type="aten__add" op_name="aten__add.1302/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.380.7 = f32[64,1024]{1,0} add(f32[64,1024]{1,0} %slice.329.9, f32[64,1024]{1,0} %add.379.7), metadata={op_type="aten__add" op_name="aten__add.1315/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.382.3 = f32[64,1024]{1,0} add(f32[64,1024]{1,0} %convert.1437.3, f32[64,1024]{1,0} %add.380.7), metadata={op_type="aten__add" op_name="aten__add.1320/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.383.3 = f32[64,1024]{1,0} add(f32[64,1024]{1,0} %slice.328.5, f32[64,1024]{1,0} %add.382.3), metadata={op_type="aten__add" op_name="aten__add.1333/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.780 = f32[64,1024]{1,0} multiply(f32[64,1024]{1,0} %add.383.3, f32[64,1024]{1,0} %add.383.3), metadata={op_type="aten__pow" op_name="aten__pow" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %constant_688 = f32[] constant(0), metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %reduce.89 = f32[64]{0} reduce(f32[64,1024]{1,0} %multiply.780, f32[] %constant_688), dimensions={1}, to_apply=%AddComputation.96, metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %constant_687 = f32[] constant(0.0009765625), metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.880 = f32[64]{0} broadcast(f32[] %constant_687), dimensions={}, metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.778 = f32[64]{0} multiply(f32[64]{0} %reduce.89, f32[64]{0} %broadcast.880), metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_0.1021 = f32[] parameter(0)
+  %broadcast.879 = f32[64]{0} broadcast(f32[] %param_0.1021), dimensions={}, metadata={op_type="aten__add" op_name="aten__add.1028/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.447 = f32[64]{0} add(f32[64]{0} %multiply.778, f32[64]{0} %broadcast.879), metadata={op_type="aten__add" op_name="aten__add.1334/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %rsqrt.171 = f32[64]{0} rsqrt(f32[64]{0} %add.447), metadata={op_type="aten__rsqrt" op_name="aten__rsqrt" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.878 = f32[64,1024]{1,0} broadcast(f32[64]{0} %rsqrt.171), dimensions={0}, metadata={op_type="aten__mul" op_name="aten__mul.1335/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.776 = f32[64,1024]{1,0} multiply(f32[64,1024]{1,0} %add.383.3, f32[64,1024]{1,0} %broadcast.878), metadata={op_type="aten__mul" op_name="aten__mul.1335/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_3.503 = bf16[1024]{0} parameter(3)
+  %convert.1438.1 = f32[1024]{0} convert(bf16[1024]{0} %param_3.503), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.610.1 = f32[64,1024]{1,0} broadcast(f32[1024]{0} %convert.1438.1), dimensions={1}, metadata={op_type="aten__mul" op_name="aten__mul.1336/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.624.1 = f32[64,1024]{1,0} multiply(f32[64,1024]{1,0} %multiply.776, f32[64,1024]{1,0} %broadcast.610.1), metadata={op_type="aten__mul" op_name="aten__mul.1336/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  ROOT %convert.1439.1 = bf16[64,1024]{1,0} convert(f32[64,1024]{1,0} %multiply.624.1), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+}

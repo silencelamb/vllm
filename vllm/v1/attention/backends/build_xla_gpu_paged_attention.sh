@@ -25,10 +25,10 @@ echo "Building XLA GPU PagedAttention custom op..."
 echo "CUDA_HOME: $CUDA_HOME"
 echo "XLA_INCLUDE: $XLA_INCLUDE"
 echo "Output: $OUTPUT_LIB"
-
 # Compile the custom op
-nvcc -O3 \
+nvcc -O2 \
     -shared \
+    -Xcompiler \
     -fPIC \
     -std=c++17 \
     -I"$CUDA_HOME/include" \

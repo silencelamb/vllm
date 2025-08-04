@@ -1,0 +1,991 @@
+BufferAssignment:
+allocation 0: size 311164928, parameter 5, shape |bf16[151936,1024]| at ShapeIndex {}:
+ value: <412 p5.24.0 @0> (size=311164928,offset=0): bf16[151936,1024]{1,0}
+allocation 1: size 277413888, parameter 28, shape |bf16[2,4233,16,8,128]| at ShapeIndex {}:
+ value: <440 p28.505.0 @0> (size=277413888,offset=0): bf16[2,4233,16,8,128]{4,3,2,1,0}
+allocation 2: size 138706944, maybe-live-out:
+ value: <364 custom-call.11.0{0} @0> (size=786432,offset=0): bf16[64,6144]{1,0}
+ value: <372 custom-call.13.0{0} @0> (size=786432,offset=0): bf16[64,6144]{1,0}
+ value: <380 custom-call.15.0{0} @0> (size=786432,offset=0): bf16[64,6144]{1,0}
+ value: <388 custom-call.17.0{0} @0> (size=786432,offset=0): bf16[64,6144]{1,0}
+ value: <396 custom-call.19.0{0} @0> (size=786432,offset=0): bf16[64,6144]{1,0}
+ value: <400 custom-call.20.0{0} @0> (size=131072,offset=0): bf16[64,1024]{1,0}
+ value: <404 custom-call.21.0{0} @0> (size=524288,offset=0): bf16[64,4096]{1,0}
+ value: <409 loop_slice_fusion @0> (size=138706944,offset=0): bf16[69353472]{0}
+allocation 3: size 138706944, maybe-live-out:
+ value: <360 wrapped_concatenate @0> (size=20971520,offset=0): bf16[5120,2048]{1,0}
+ value: <365 custom-call.11.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <369 custom-call.12.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <373 custom-call.13.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <377 custom-call.14.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <381 custom-call.15.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <385 custom-call.16.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <389 custom-call.17.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <393 custom-call.18.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <397 custom-call.19.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <401 custom-call.20.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <405 custom-call.21.0{1} @0> (size=4194304,offset=0): s8[4194304]{0}
+ value: <406 triton_softmax.7.0 @0> (size=262144,offset=0): f32[64,8,128]{2,1,0}
+ value: <410 wrapped_slice.1 @0> (size=138706944,offset=0): bf16[1,4233,16,8,128]{4,3,2,1,0}
+allocation 4: size 12582912, parameter 8, shape |bf16[6144,1024]| at ShapeIndex {}:
+ value: <421 p8.46.0 @0> (size=12582912,offset=0): bf16[6144,1024]{1,0}
+allocation 5: size 12582912, parameter 12, shape |bf16[6144,1024]| at ShapeIndex {}:
+ value: <424 p12.118.0 @0> (size=12582912,offset=0): bf16[6144,1024]{1,0}
+allocation 6: size 12582912, parameter 16, shape |bf16[6144,1024]| at ShapeIndex {}:
+ value: <427 p16.190.0 @0> (size=12582912,offset=0): bf16[6144,1024]{1,0}
+allocation 7: size 12582912, parameter 20, shape |bf16[6144,1024]| at ShapeIndex {}:
+ value: <430 p20.262.0 @0> (size=12582912,offset=0): bf16[6144,1024]{1,0}
+allocation 8: size 12582912, parameter 24, shape |bf16[6144,1024]| at ShapeIndex {}:
+ value: <433 p24.334.0 @0> (size=12582912,offset=0): bf16[6144,1024]{1,0}
+allocation 9: size 10485760, parameter 27, shape |bf16[40960,128]| at ShapeIndex {}:
+ value: <438 p27.461.0 @0> (size=10485760,offset=0): bf16[40960,128]{1,0}
+allocation 10: size 8388608, parameter 2, shape |bf16[4096,1024]| at ShapeIndex {}:
+ value: <436 p2.6.0 @0> (size=8388608,offset=0): bf16[4096,1024]{1,0}
+allocation 11: size 6291456, parameter 7, shape |bf16[1024,3072]| at ShapeIndex {}:
+ value: <422 p7.44.0 @0> (size=6291456,offset=0): bf16[1024,3072]{1,0}
+allocation 12: size 6291456, parameter 11, shape |bf16[1024,3072]| at ShapeIndex {}:
+ value: <425 p11.116.0 @0> (size=6291456,offset=0): bf16[1024,3072]{1,0}
+allocation 13: size 6291456, parameter 15, shape |bf16[1024,3072]| at ShapeIndex {}:
+ value: <428 p15.188.0 @0> (size=6291456,offset=0): bf16[1024,3072]{1,0}
+allocation 14: size 6291456, parameter 19, shape |bf16[1024,3072]| at ShapeIndex {}:
+ value: <431 p19.260.0 @0> (size=6291456,offset=0): bf16[1024,3072]{1,0}
+allocation 15: size 6291456, parameter 23, shape |bf16[1024,3072]| at ShapeIndex {}:
+ value: <434 p23.332.0 @0> (size=6291456,offset=0): bf16[1024,3072]{1,0}
+allocation 16: size 4194304, parameter 22, shape |bf16[1024,2048]| at ShapeIndex {}:
+ value: <414 p22.316.0 @0> (size=4194304,offset=0): bf16[1024,2048]{1,0}
+allocation 17: size 4194304, parameter 18, shape |bf16[1024,2048]| at ShapeIndex {}:
+ value: <415 p18.244.0 @0> (size=4194304,offset=0): bf16[1024,2048]{1,0}
+allocation 18: size 4194304, parameter 14, shape |bf16[1024,2048]| at ShapeIndex {}:
+ value: <416 p14.172.0 @0> (size=4194304,offset=0): bf16[1024,2048]{1,0}
+allocation 19: size 4194304, parameter 10, shape |bf16[1024,2048]| at ShapeIndex {}:
+ value: <417 p10.100.0 @0> (size=4194304,offset=0): bf16[1024,2048]{1,0}
+allocation 20: size 4194304, parameter 6, shape |bf16[1024,2048]| at ShapeIndex {}:
+ value: <418 p6.28.0 @0> (size=4194304,offset=0): bf16[1024,2048]{1,0}
+allocation 21: size 131072, maybe-live-out:
+ value: <362 fusion.75 @0> (size=131072,offset=0): bf16[64,1024]{1,0}
+ value: <368 custom-call.12.0{0} @0> (size=131072,offset=0): bf16[64,1024]{1,0}
+ value: <407 input_concatenate_fusion @0> (size=131072,offset=0): bf16[64,8,128]{2,1,0}
+allocation 22: size 131072, maybe-live-out:
+ value: <359 loop_gather_fusion @0> (size=131072,offset=0): bf16[64,1,1024]{2,0,1}
+ value: <408 wrapped_slice @0> (size=131072,offset=0): bf16[64,1024]{1,0}
+allocation 23: size 2048, parameter 9, shape |bf16[1024]| at ShapeIndex {}:
+ value: <420 p9.48.0 @0> (size=2048,offset=0): bf16[1024]{0}
+allocation 24: size 2048, parameter 13, shape |bf16[1024]| at ShapeIndex {}:
+ value: <423 p13.120.0 @0> (size=2048,offset=0): bf16[1024]{0}
+allocation 25: size 2048, parameter 17, shape |bf16[1024]| at ShapeIndex {}:
+ value: <426 p17.192.0 @0> (size=2048,offset=0): bf16[1024]{0}
+allocation 26: size 2048, parameter 21, shape |bf16[1024]| at ShapeIndex {}:
+ value: <429 p21.264.0 @0> (size=2048,offset=0): bf16[1024]{0}
+allocation 27: size 2048, parameter 25, shape |bf16[1024]| at ShapeIndex {}:
+ value: <432 p25.336.0 @0> (size=2048,offset=0): bf16[1024]{0}
+allocation 28: size 2048, parameter 3, shape |bf16[1024]| at ShapeIndex {}:
+ value: <435 p3.8.0 @0> (size=2048,offset=0): bf16[1024]{0}
+allocation 29: size 256, parameter 4, shape |s32[64]| at ShapeIndex {}:
+ value: <413 p4.22.0 @0> (size=256,offset=0): s32[64]{0}
+allocation 30: size 256, parameter 0, shape |bf16[128]| at ShapeIndex {}:
+ value: <437 p0.1.0 @0> (size=256,offset=0): bf16[128]{0}
+allocation 31: size 256, parameter 26, shape |s32[64]| at ShapeIndex {}:
+ value: <439 p26.460.0 @0> (size=256,offset=0): s32[64]{0}
+allocation 32: size 32, output shape is |(bf16[64,8,128], bf16[64,8,128], bf16[4233,16,8,128], bf16[4233,16,8,128])|, maybe-live-out:
+ value: <441 tuple.514.0{} @0> (size=32,offset=0): (bf16[64,8,128]{2,1,0}, bf16[64,8,128]{2,1,0}, bf16[4233,16,8,128]{3,2,1,0}, bf16[4233,16,8,128]{3,2,1,0})
+allocation 33: size 4, thread-local:
+ value: <17 add.77 @0> (size=4,offset=0): f32[]
+allocation 34: size 4, thread-local:
+ value: <16 y.58 @0> (size=4,offset=0): f32[]
+allocation 35: size 4, thread-local:
+ value: <15 x.57 @0> (size=4,offset=0): f32[]
+allocation 36: size 4, parameter 1, shape |f32[]| at ShapeIndex {}:
+ value: <419 p1.4.0 @0> (size=4,offset=0): f32[]
+allocation 37: size 1443232, preallocated-temp:
+ value: <361 gemm_fusion_dot.19.0 @0> (size=655360,offset=1152): bf16[64,5120]{1,0}
+ value: <363 custom-call.11.0{} @0> (size=16,offset=1443072): (bf16[64,6144]{1,0}, s8[4194304]{0})
+ value: <366 loop_convert_fusion.4 @0> (size=393216,offset=656512): bf16[64,3072]{1,0}
+ value: <367 custom-call.12.0{} @0> (size=16,offset=1442944): (bf16[64,1024]{1,0}, s8[4194304]{0})
+ value: <370 fusion.74 @0> (size=131072,offset=656512): bf16[64,1024]{1,0}
+ value: <371 custom-call.13.0{} @0> (size=16,offset=1024): (bf16[64,6144]{1,0}, s8[4194304]{0})
+ value: <374 loop_convert_fusion.3 @0> (size=393216,offset=656512): bf16[64,3072]{1,0}
+ value: <375 custom-call.14.0{} @0> (size=16,offset=0): (bf16[64,1024]{1,0}, s8[4194304]{0})
+ value: <376 custom-call.14.0{0} @0> (size=131072,offset=1049728): bf16[64,1024]{1,0}
+ value: <378 fusion.73 @0> (size=131072,offset=656512): bf16[64,1024]{1,0}
+ value: <379 custom-call.15.0{} @0> (size=16,offset=128): (bf16[64,6144]{1,0}, s8[4194304]{0})
+ value: <382 loop_convert_fusion.2 @0> (size=393216,offset=656512): bf16[64,3072]{1,0}
+ value: <383 custom-call.16.0{} @0> (size=16,offset=256): (bf16[64,1024]{1,0}, s8[4194304]{0})
+ value: <384 custom-call.16.0{0} @0> (size=131072,offset=1180800): bf16[64,1024]{1,0}
+ value: <386 fusion.72 @0> (size=131072,offset=656512): bf16[64,1024]{1,0}
+ value: <387 custom-call.17.0{} @0> (size=16,offset=384): (bf16[64,6144]{1,0}, s8[4194304]{0})
+ value: <390 loop_convert_fusion.1 @0> (size=393216,offset=656512): bf16[64,3072]{1,0}
+ value: <391 custom-call.18.0{} @0> (size=16,offset=512): (bf16[64,1024]{1,0}, s8[4194304]{0})
+ value: <392 custom-call.18.0{0} @0> (size=131072,offset=1311872): bf16[64,1024]{1,0}
+ value: <394 fusion.71 @0> (size=131072,offset=656512): bf16[64,1024]{1,0}
+ value: <395 custom-call.19.0{} @0> (size=16,offset=640): (bf16[64,6144]{1,0}, s8[4194304]{0})
+ value: <398 loop_convert_fusion @0> (size=393216,offset=656512): bf16[64,3072]{1,0}
+ value: <399 custom-call.20.0{} @0> (size=16,offset=768): (bf16[64,1024]{1,0}, s8[4194304]{0})
+ value: <402 fusion.69 @0> (size=131072,offset=656512): bf16[64,1024]{1,0}
+ value: <403 custom-call.21.0{} @0> (size=16,offset=896): (bf16[64,4096]{1,0}, s8[4194304]{0})
+ value: <411 tuple{} @0> (size=32,offset=1443200): (bf16[64,8,128]{2,1,0}, bf16[64,8,128]{2,1,0}, bf16[4233,16,8,128]{3,2,1,0}, bf16[1,4233,16,8,128]{4,3,2,1,0})
+
+Total bytes used: 1001928912 (955.51MiB)
+
+Used values:
+<15 x.57 @0>
+ positions:
+  x.57
+ uses:
+  add.77, operand 0
+ from instruction: %x.57 = f32[] parameter(0)
+<16 y.58 @0>
+ positions:
+  y.58
+ uses:
+  add.77, operand 1
+ from instruction: %y.58 = f32[] parameter(1)
+<17 add.77 @0>
+ positions:
+  add.77
+ uses:
+ from instruction: %add.77 = f32[] add(f32[] %x.57, f32[] %y.58)
+<359 loop_gather_fusion @0>
+ positions:
+  loop_gather_fusion
+ uses:
+  fusion.75, operand 1
+  fusion.74, operand 1
+  fusion.73, operand 2
+  fusion.72, operand 4
+  fusion.71, operand 5
+  fusion.69, operand 6
+ from instruction: %loop_gather_fusion = bf16[64,1,1024]{2,0,1} fusion(bf16[151936,1024]{1,0} %p, s32[64]{0} %p.1), kind=kLoop, calls=%fused_gather, metadata={op_type="aten__index_select" op_name="aten__index_select" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<360 wrapped_concatenate @0>
+ positions:
+  wrapped_concatenate
+ uses:
+  gemm_fusion_dot.19.0, operand 0
+ from instruction: %wrapped_concatenate = bf16[5120,2048]{1,0} fusion(bf16[1024,2048]{1,0} %p.2, bf16[1024,2048]{1,0} %p.3, bf16[1024,2048]{1,0} %p.4, bf16[1024,2048]{1,0} %p.5, bf16[1024,2048]{1,0} %p.6), kind=kLoop, calls=%wrapped_concatenate_computation, metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<361 gemm_fusion_dot.19.0 @0>
+ positions:
+  gemm_fusion_dot.19.0
+ uses:
+  fusion.75, operand 2
+  fusion.74, operand 2
+  fusion.73, operand 3
+  fusion.72, operand 2
+  fusion.71, operand 3
+  fusion.69, operand 4
+ from instruction: %gemm_fusion_dot.19.0 = bf16[64,5120]{1,0} fusion(bf16[5120,2048]{1,0} %wrapped_concatenate), kind=kCustom, calls=%gemm_fusion_dot.19_computation, metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton_gemm","triton_gemm_config":{"block_m":"64","block_n":"32","block_k":"64","split_k":"1","num_stages":"4","num_warps":"4","num_ctas":"1"}},"force_earliest_schedule":false}
+<362 fusion.75 @0>
+ positions:
+  fusion.75
+ uses:
+  custom-call.11.0, operand 0
+ from instruction: %fusion.75 = bf16[64,1024]{1,0} fusion(f32[] %p.7, bf16[64,1,1024]{2,0,1} %loop_gather_fusion, bf16[64,5120]{1,0} %gemm_fusion_dot.19.0, bf16[1024]{0} %p.8), kind=kCustom, calls=%fused_computation.60, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","1024"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<363 custom-call.11.0{} @0>
+ positions:
+  custom-call.11.0 {}
+ uses:
+  get-tuple-element.11, operand 0 {}
+ from instruction: %custom-call.11.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.75, bf16[6144,1024]{1,0} %p.9), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<364 custom-call.11.0{0} @0>
+ positions:
+  custom-call.11.0 {0}
+  get-tuple-element.11
+ uses:
+  loop_convert_fusion.4, operand 0
+ from instruction: %custom-call.11.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.75, bf16[6144,1024]{1,0} %p.9), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<365 custom-call.11.0{1} @0>
+ positions:
+  custom-call.11.0 {1}
+ uses:
+ from instruction: %custom-call.11.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.75, bf16[6144,1024]{1,0} %p.9), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<366 loop_convert_fusion.4 @0>
+ positions:
+  loop_convert_fusion.4
+ uses:
+  custom-call.12.0, operand 0
+ from instruction: %loop_convert_fusion.4 = bf16[64,3072]{1,0} fusion(bf16[64,6144]{1,0} %get-tuple-element.11), kind=kLoop, calls=%fused_convert.4, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756 deduplicated_name="loop_convert_fusion"}
+<367 custom-call.12.0{} @0>
+ positions:
+  custom-call.12.0 {}
+ uses:
+  get-tuple-element.1.0, operand 0 {}
+ from instruction: %custom-call.12.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.4, bf16[1024,3072]{1,0} %p.10), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<368 custom-call.12.0{0} @0>
+ positions:
+  custom-call.12.0 {0}
+  get-tuple-element.1.0
+ uses:
+  fusion.74, operand 3
+  fusion.73, operand 4
+  fusion.72, operand 5
+  fusion.71, operand 6
+  fusion.69, operand 7
+ from instruction: %custom-call.12.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.4, bf16[1024,3072]{1,0} %p.10), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<369 custom-call.12.0{1} @0>
+ positions:
+  custom-call.12.0 {1}
+ uses:
+ from instruction: %custom-call.12.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.4, bf16[1024,3072]{1,0} %p.10), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<370 fusion.74 @0>
+ positions:
+  fusion.74
+ uses:
+  custom-call.13.0, operand 0
+ from instruction: %fusion.74 = bf16[64,1024]{1,0} fusion(f32[] %p.7, bf16[64,1,1024]{2,0,1} %loop_gather_fusion, bf16[64,5120]{1,0} %gemm_fusion_dot.19.0, bf16[64,1024]{1,0} %get-tuple-element.1.0, bf16[1024]{0} %p.11), kind=kCustom, calls=%fused_computation.59, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","1024"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<371 custom-call.13.0{} @0>
+ positions:
+  custom-call.13.0 {}
+ uses:
+  get-tuple-element.2.0, operand 0 {}
+ from instruction: %custom-call.13.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.74, bf16[6144,1024]{1,0} %p.12), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<372 custom-call.13.0{0} @0>
+ positions:
+  custom-call.13.0 {0}
+  get-tuple-element.2.0
+ uses:
+  loop_convert_fusion.3, operand 0
+ from instruction: %custom-call.13.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.74, bf16[6144,1024]{1,0} %p.12), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<373 custom-call.13.0{1} @0>
+ positions:
+  custom-call.13.0 {1}
+ uses:
+ from instruction: %custom-call.13.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.74, bf16[6144,1024]{1,0} %p.12), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<374 loop_convert_fusion.3 @0>
+ positions:
+  loop_convert_fusion.3
+ uses:
+  custom-call.14.0, operand 0
+ from instruction: %loop_convert_fusion.3 = bf16[64,3072]{1,0} fusion(bf16[64,6144]{1,0} %get-tuple-element.2.0), kind=kLoop, calls=%fused_convert.3, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756 deduplicated_name="loop_convert_fusion"}
+<375 custom-call.14.0{} @0>
+ positions:
+  custom-call.14.0 {}
+ uses:
+  get-tuple-element.3.0, operand 0 {}
+ from instruction: %custom-call.14.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.3, bf16[1024,3072]{1,0} %p.13), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<376 custom-call.14.0{0} @0>
+ positions:
+  custom-call.14.0 {0}
+  get-tuple-element.3.0
+ uses:
+  fusion.73, operand 5
+  fusion.72, operand 6
+  fusion.71, operand 7
+  fusion.69, operand 8
+ from instruction: %custom-call.14.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.3, bf16[1024,3072]{1,0} %p.13), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<377 custom-call.14.0{1} @0>
+ positions:
+  custom-call.14.0 {1}
+ uses:
+ from instruction: %custom-call.14.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.3, bf16[1024,3072]{1,0} %p.13), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<378 fusion.73 @0>
+ positions:
+  fusion.73
+ uses:
+  custom-call.15.0, operand 0
+ from instruction: %fusion.73 = bf16[64,1024]{1,0} fusion(f32[] %p.7, bf16[1024]{0} %p.14, bf16[64,1,1024]{2,0,1} %loop_gather_fusion, bf16[64,5120]{1,0} %gemm_fusion_dot.19.0, bf16[64,1024]{1,0} %get-tuple-element.1.0, /*index=5*/bf16[64,1024]{1,0} %get-tuple-element.3.0), kind=kCustom, calls=%fused_computation.58, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","1024"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<379 custom-call.15.0{} @0>
+ positions:
+  custom-call.15.0 {}
+ uses:
+  get-tuple-element.4.0, operand 0 {}
+ from instruction: %custom-call.15.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.73, bf16[6144,1024]{1,0} %p.15), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<380 custom-call.15.0{0} @0>
+ positions:
+  custom-call.15.0 {0}
+  get-tuple-element.4.0
+ uses:
+  loop_convert_fusion.2, operand 0
+ from instruction: %custom-call.15.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.73, bf16[6144,1024]{1,0} %p.15), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<381 custom-call.15.0{1} @0>
+ positions:
+  custom-call.15.0 {1}
+ uses:
+ from instruction: %custom-call.15.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.73, bf16[6144,1024]{1,0} %p.15), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<382 loop_convert_fusion.2 @0>
+ positions:
+  loop_convert_fusion.2
+ uses:
+  custom-call.16.0, operand 0
+ from instruction: %loop_convert_fusion.2 = bf16[64,3072]{1,0} fusion(bf16[64,6144]{1,0} %get-tuple-element.4.0), kind=kLoop, calls=%fused_convert.2, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756 deduplicated_name="loop_convert_fusion"}
+<383 custom-call.16.0{} @0>
+ positions:
+  custom-call.16.0 {}
+ uses:
+  get-tuple-element.5.0, operand 0 {}
+ from instruction: %custom-call.16.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.2, bf16[1024,3072]{1,0} %p.16), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<384 custom-call.16.0{0} @0>
+ positions:
+  custom-call.16.0 {0}
+  get-tuple-element.5.0
+ uses:
+  fusion.72, operand 1
+  fusion.71, operand 2
+  fusion.69, operand 3
+ from instruction: %custom-call.16.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.2, bf16[1024,3072]{1,0} %p.16), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<385 custom-call.16.0{1} @0>
+ positions:
+  custom-call.16.0 {1}
+ uses:
+ from instruction: %custom-call.16.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.2, bf16[1024,3072]{1,0} %p.16), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<386 fusion.72 @0>
+ positions:
+  fusion.72
+ uses:
+  custom-call.17.0, operand 0
+ from instruction: %fusion.72 = bf16[64,1024]{1,0} fusion(f32[] %p.7, bf16[64,1024]{1,0} %get-tuple-element.5.0, bf16[64,5120]{1,0} %gemm_fusion_dot.19.0, bf16[1024]{0} %p.17, bf16[64,1,1024]{2,0,1} %loop_gather_fusion, /*index=5*/bf16[64,1024]{1,0} %get-tuple-element.1.0, bf16[64,1024]{1,0} %get-tuple-element.3.0), kind=kCustom, calls=%fused_computation.57, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","1024"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<387 custom-call.17.0{} @0>
+ positions:
+  custom-call.17.0 {}
+ uses:
+  get-tuple-element.6.0, operand 0 {}
+ from instruction: %custom-call.17.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.72, bf16[6144,1024]{1,0} %p.18), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<388 custom-call.17.0{0} @0>
+ positions:
+  custom-call.17.0 {0}
+  get-tuple-element.6.0
+ uses:
+  loop_convert_fusion.1, operand 0
+ from instruction: %custom-call.17.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.72, bf16[6144,1024]{1,0} %p.18), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<389 custom-call.17.0{1} @0>
+ positions:
+  custom-call.17.0 {1}
+ uses:
+ from instruction: %custom-call.17.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.72, bf16[6144,1024]{1,0} %p.18), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<390 loop_convert_fusion.1 @0>
+ positions:
+  loop_convert_fusion.1
+ uses:
+  custom-call.18.0, operand 0
+ from instruction: %loop_convert_fusion.1 = bf16[64,3072]{1,0} fusion(bf16[64,6144]{1,0} %get-tuple-element.6.0), kind=kLoop, calls=%fused_convert.1, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756 deduplicated_name="loop_convert_fusion"}
+<391 custom-call.18.0{} @0>
+ positions:
+  custom-call.18.0 {}
+ uses:
+  get-tuple-element.7.0, operand 0 {}
+ from instruction: %custom-call.18.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.1, bf16[1024,3072]{1,0} %p.19), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<392 custom-call.18.0{0} @0>
+ positions:
+  custom-call.18.0 {0}
+  get-tuple-element.7.0
+ uses:
+  fusion.71, operand 4
+  fusion.69, operand 5
+ from instruction: %custom-call.18.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.1, bf16[1024,3072]{1,0} %p.19), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<393 custom-call.18.0{1} @0>
+ positions:
+  custom-call.18.0 {1}
+ uses:
+ from instruction: %custom-call.18.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion.1, bf16[1024,3072]{1,0} %p.19), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<394 fusion.71 @0>
+ positions:
+  fusion.71
+ uses:
+  custom-call.19.0, operand 0
+ from instruction: %fusion.71 = bf16[64,1024]{1,0} fusion(f32[] %p.7, bf16[1024]{0} %p.20, bf16[64,1024]{1,0} %get-tuple-element.5.0, bf16[64,5120]{1,0} %gemm_fusion_dot.19.0, bf16[64,1024]{1,0} %get-tuple-element.7.0, /*index=5*/bf16[64,1,1024]{2,0,1} %loop_gather_fusion, bf16[64,1024]{1,0} %get-tuple-element.1.0, bf16[64,1024]{1,0} %get-tuple-element.3.0), kind=kCustom, calls=%fused_computation.56, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","1024"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<395 custom-call.19.0{} @0>
+ positions:
+  custom-call.19.0 {}
+ uses:
+  get-tuple-element.8.0, operand 0 {}
+ from instruction: %custom-call.19.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.71, bf16[6144,1024]{1,0} %p.21), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<396 custom-call.19.0{0} @0>
+ positions:
+  custom-call.19.0 {0}
+  get-tuple-element.8.0
+ uses:
+  loop_convert_fusion, operand 0
+ from instruction: %custom-call.19.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.71, bf16[6144,1024]{1,0} %p.21), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<397 custom-call.19.0{1} @0>
+ positions:
+  custom-call.19.0 {1}
+ uses:
+ from instruction: %custom-call.19.0 = (bf16[64,6144]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.71, bf16[6144,1024]{1,0} %p.21), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"6291456","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<398 loop_convert_fusion @0>
+ positions:
+  loop_convert_fusion
+ uses:
+  custom-call.20.0, operand 0
+ from instruction: %loop_convert_fusion = bf16[64,3072]{1,0} fusion(bf16[64,6144]{1,0} %get-tuple-element.8.0), kind=kLoop, calls=%fused_convert, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756 deduplicated_name="loop_convert_fusion"}
+<399 custom-call.20.0{} @0>
+ positions:
+  custom-call.20.0 {}
+ uses:
+  get-tuple-element.9.0, operand 0 {}
+ from instruction: %custom-call.20.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion, bf16[1024,3072]{1,0} %p.22), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<400 custom-call.20.0{0} @0>
+ positions:
+  custom-call.20.0 {0}
+  get-tuple-element.9.0
+ uses:
+  fusion.69, operand 1
+ from instruction: %custom-call.20.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion, bf16[1024,3072]{1,0} %p.22), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<401 custom-call.20.0{1} @0>
+ positions:
+  custom-call.20.0 {1}
+ uses:
+ from instruction: %custom-call.20.0 = (bf16[64,1024]{1,0}, s8[4194304]{0}) custom-call(bf16[64,3072]{1,0} %loop_convert_fusion, bf16[1024,3072]{1,0} %p.22), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"196608","rhs_stride":"3145728","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<402 fusion.69 @0>
+ positions:
+  fusion.69
+ uses:
+  custom-call.21.0, operand 0
+ from instruction: %fusion.69 = bf16[64,1024]{1,0} fusion(f32[] %p.7, bf16[64,1024]{1,0} %get-tuple-element.9.0, bf16[1024]{0} %p.23, bf16[64,1024]{1,0} %get-tuple-element.5.0, bf16[64,5120]{1,0} %gemm_fusion_dot.19.0, /*index=5*/bf16[64,1024]{1,0} %get-tuple-element.7.0, bf16[64,1,1024]{2,0,1} %loop_gather_fusion, bf16[64,1024]{1,0} %get-tuple-element.1.0, bf16[64,1024]{1,0} %get-tuple-element.3.0), kind=kCustom, calls=%fused_computation.54, metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","1024"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<403 custom-call.21.0{} @0>
+ positions:
+  custom-call.21.0 {}
+ uses:
+  get-tuple-element.10.0, operand 0 {}
+ from instruction: %custom-call.21.0 = (bf16[64,4096]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.69, bf16[4096,1024]{1,0} %p.24), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"4194304","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<404 custom-call.21.0{0} @0>
+ positions:
+  custom-call.21.0 {0}
+  get-tuple-element.10.0
+ uses:
+  wrapped_slice, operand 0
+  triton_softmax.7.0, operand 1
+ from instruction: %custom-call.21.0 = (bf16[64,4096]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.69, bf16[4096,1024]{1,0} %p.24), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"4194304","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<405 custom-call.21.0{1} @0>
+ positions:
+  custom-call.21.0 {1}
+ uses:
+ from instruction: %custom-call.21.0 = (bf16[64,4096]{1,0}, s8[4194304]{0}) custom-call(bf16[64,1024]{1,0} %fusion.69, bf16[4096,1024]{1,0} %p.24), custom_call_target="__cublas$gemm", metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"gemm_backend_config":{"alpha_real":1,"alpha_imag":0,"beta":0,"dot_dimension_numbers":{"lhs_contracting_dimensions":["1"],"rhs_contracting_dimensions":["1"],"lhs_batch_dimensions":[],"rhs_batch_dimensions":[]},"precision_config":{"operand_precision":["DEFAULT","DEFAULT"],"algorithm":"ALG_UNSET"},"epilogue":"DEFAULT","damax_output":false,"lhs_stride":"65536","rhs_stride":"4194304","grad_x":false,"grad_y":false},"force_earliest_schedule":false}
+<406 triton_softmax.7.0 @0>
+ positions:
+  triton_softmax.7.0
+ uses:
+  input_concatenate_fusion, operand 0
+ from instruction: %triton_softmax.7.0 = f32[64,8,128]{2,1,0} fusion(f32[] %p.7, bf16[64,4096]{1,0} %get-tuple-element.10.0), kind=kCustom, calls=%triton_softmax_computation.7, metadata={op_type="aten__mul" op_name="aten__mul.1109/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}, backend_config={"operation_queue_id":"0","wait_on_operation_queues":[],"fusion_backend_config":{"kind":"__triton","block_level_fusion_config":{"output_tiles":[{"sizes":["1","4","128"]}],"num_warps":"2"}},"force_earliest_schedule":false}
+<407 input_concatenate_fusion @0>
+ positions:
+  input_concatenate_fusion
+  tuple.514.0 {0}
+  call {0}
+  get-tuple-element.13
+  tuple {0}
+ uses:
+  tuple, operand 0
+  tuple.514.0, operand 0
+ from instruction: %input_concatenate_fusion = bf16[64,8,128]{2,1,0} fusion(f32[64,8,128]{2,1,0} %triton_softmax.7.0, bf16[128]{0} %p.25, bf16[40960,128]{1,0} %p.26, s32[64]{0} %p.27), kind=kInput, calls=%fused_concatenate, metadata={op_type="aten__cat" op_name="aten__cat" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<408 wrapped_slice @0>
+ positions:
+  wrapped_slice
+  tuple.514.0 {1}
+  call {1}
+  get-tuple-element.14
+  bitcast.1323.0
+  tuple {1}
+ uses:
+  bitcast.1323.0, operand 0
+  tuple.514.0, operand 1
+  tuple, operand 1
+ from instruction: %wrapped_slice = bf16[64,1024]{1,0} fusion(bf16[64,4096]{1,0} %get-tuple-element.10.0), kind=kLoop, calls=%wrapped_slice_computation, metadata={op_type="aten__split" op_name="aten__split" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<409 loop_slice_fusion @0>
+ positions:
+  loop_slice_fusion
+  tuple.514.0 {3}
+  call {2}
+  get-tuple-element.15
+  bitcast.1335.0
+  tuple {2}
+ uses:
+  bitcast.1335.0, operand 0
+  tuple.514.0, operand 3
+  tuple, operand 2
+ from instruction: %loop_slice_fusion = bf16[69353472]{0} fusion(bf16[2,4233,16,8,128]{4,3,2,1,0} %p.28), kind=kLoop, calls=%fused_slice, metadata={op_type="aten__as_strided" op_name="aten__as_strided" source_file="/usr/local/lib/python3.10/site-packages/torch/_higher_order_ops/auto_functionalize.py" source_line=54}
+<410 wrapped_slice.1 @0>
+ positions:
+  wrapped_slice.1
+  tuple.514.0 {2}
+  bitcast.1328.0
+  call {3}
+  get-tuple-element.16
+  tuple {3}
+ uses:
+  tuple, operand 3
+  tuple.514.0, operand 2
+  bitcast.1328.0, operand 0
+ from instruction: %wrapped_slice.1 = bf16[1,4233,16,8,128]{4,3,2,1,0} fusion(bf16[2,4233,16,8,128]{4,3,2,1,0} %p.28), kind=kLoop, calls=%wrapped_slice_computation.1, metadata={op_type="aten__as_strided" op_name="aten__as_strided" source_file="/usr/local/lib/python3.10/site-packages/torch/_higher_order_ops/auto_functionalize.py" source_line=54}
+<411 tuple{} @0>
+ positions:
+  tuple {}
+  call {}
+ uses:
+  get-tuple-element.13, operand 0 {}
+  get-tuple-element.14, operand 0 {}
+  get-tuple-element.15, operand 0 {}
+  get-tuple-element.16, operand 0 {}
+ from instruction: %tuple = (bf16[64,8,128]{2,1,0}, bf16[64,8,128]{2,1,0}, bf16[4233,16,8,128]{3,2,1,0}, bf16[1,4233,16,8,128]{4,3,2,1,0}) tuple(bf16[64,8,128]{2,1,0} %input_concatenate_fusion, bf16[64,8,128]{2,1,0} %bitcast.1323.0, bf16[4233,16,8,128]{3,2,1,0} %bitcast.1335.0, bf16[1,4233,16,8,128]{4,3,2,1,0} %wrapped_slice.1)
+<412 p5.24.0 @0>
+ positions:
+  p5.24.0
+  p
+ uses:
+  call, operand 0
+  loop_gather_fusion, operand 0
+ from instruction: %p5.24.0 = bf16[151936,1024]{1,0} parameter(5), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<413 p4.22.0 @0>
+ positions:
+  p4.22.0
+  p.1
+ uses:
+  call, operand 1
+  loop_gather_fusion, operand 1
+ from instruction: %p4.22.0 = s32[64]{0} parameter(4), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<414 p22.316.0 @0>
+ positions:
+  p22.316.0
+  p.2
+ uses:
+  call, operand 2
+  wrapped_concatenate, operand 0
+ from instruction: %p22.316.0 = bf16[1024,2048]{1,0} parameter(22), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<415 p18.244.0 @0>
+ positions:
+  p18.244.0
+  p.3
+ uses:
+  call, operand 3
+  wrapped_concatenate, operand 1
+ from instruction: %p18.244.0 = bf16[1024,2048]{1,0} parameter(18), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<416 p14.172.0 @0>
+ positions:
+  p14.172.0
+  p.4
+ uses:
+  call, operand 4
+  wrapped_concatenate, operand 2
+ from instruction: %p14.172.0 = bf16[1024,2048]{1,0} parameter(14), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<417 p10.100.0 @0>
+ positions:
+  p10.100.0
+  p.5
+ uses:
+  call, operand 5
+  wrapped_concatenate, operand 3
+ from instruction: %p10.100.0 = bf16[1024,2048]{1,0} parameter(10), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<418 p6.28.0 @0>
+ positions:
+  p6.28.0
+  p.6
+ uses:
+  call, operand 6
+  wrapped_concatenate, operand 4
+ from instruction: %p6.28.0 = bf16[1024,2048]{1,0} parameter(6), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<419 p1.4.0 @0>
+ positions:
+  p1.4.0
+  p.7
+ uses:
+  call, operand 7
+  fusion.75, operand 0
+  fusion.74, operand 0
+  fusion.73, operand 0
+  fusion.72, operand 0
+  fusion.71, operand 0
+  fusion.69, operand 0
+  triton_softmax.7.0, operand 0
+ from instruction: %p1.4.0 = f32[] parameter(1), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+<420 p9.48.0 @0>
+ positions:
+  p9.48.0
+  p.8
+ uses:
+  call, operand 8
+  fusion.75, operand 3
+ from instruction: %p9.48.0 = bf16[1024]{0} parameter(9), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<421 p8.46.0 @0>
+ positions:
+  p8.46.0
+  p.9
+ uses:
+  call, operand 9
+  custom-call.11.0, operand 1
+ from instruction: %p8.46.0 = bf16[6144,1024]{1,0} parameter(8), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<422 p7.44.0 @0>
+ positions:
+  p7.44.0
+  p.10
+ uses:
+  call, operand 10
+  custom-call.12.0, operand 1
+ from instruction: %p7.44.0 = bf16[1024,3072]{1,0} parameter(7), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<423 p13.120.0 @0>
+ positions:
+  p13.120.0
+  p.11
+ uses:
+  call, operand 11
+  fusion.74, operand 4
+ from instruction: %p13.120.0 = bf16[1024]{0} parameter(13), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<424 p12.118.0 @0>
+ positions:
+  p12.118.0
+  p.12
+ uses:
+  call, operand 12
+  custom-call.13.0, operand 1
+ from instruction: %p12.118.0 = bf16[6144,1024]{1,0} parameter(12), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<425 p11.116.0 @0>
+ positions:
+  p11.116.0
+  p.13
+ uses:
+  call, operand 13
+  custom-call.14.0, operand 1
+ from instruction: %p11.116.0 = bf16[1024,3072]{1,0} parameter(11), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<426 p17.192.0 @0>
+ positions:
+  p17.192.0
+  p.14
+ uses:
+  call, operand 14
+  fusion.73, operand 1
+ from instruction: %p17.192.0 = bf16[1024]{0} parameter(17), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<427 p16.190.0 @0>
+ positions:
+  p16.190.0
+  p.15
+ uses:
+  call, operand 15
+  custom-call.15.0, operand 1
+ from instruction: %p16.190.0 = bf16[6144,1024]{1,0} parameter(16), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<428 p15.188.0 @0>
+ positions:
+  p15.188.0
+  p.16
+ uses:
+  call, operand 16
+  custom-call.16.0, operand 1
+ from instruction: %p15.188.0 = bf16[1024,3072]{1,0} parameter(15), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<429 p21.264.0 @0>
+ positions:
+  p21.264.0
+  p.17
+ uses:
+  call, operand 17
+  fusion.72, operand 3
+ from instruction: %p21.264.0 = bf16[1024]{0} parameter(21), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<430 p20.262.0 @0>
+ positions:
+  p20.262.0
+  p.18
+ uses:
+  call, operand 18
+  custom-call.17.0, operand 1
+ from instruction: %p20.262.0 = bf16[6144,1024]{1,0} parameter(20), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<431 p19.260.0 @0>
+ positions:
+  p19.260.0
+  p.19
+ uses:
+  call, operand 19
+  custom-call.18.0, operand 1
+ from instruction: %p19.260.0 = bf16[1024,3072]{1,0} parameter(19), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<432 p25.336.0 @0>
+ positions:
+  p25.336.0
+  p.20
+ uses:
+  call, operand 20
+  fusion.71, operand 1
+ from instruction: %p25.336.0 = bf16[1024]{0} parameter(25), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<433 p24.334.0 @0>
+ positions:
+  p24.334.0
+  p.21
+ uses:
+  call, operand 21
+  custom-call.19.0, operand 1
+ from instruction: %p24.334.0 = bf16[6144,1024]{1,0} parameter(24), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<434 p23.332.0 @0>
+ positions:
+  p23.332.0
+  p.22
+ uses:
+  call, operand 22
+  custom-call.20.0, operand 1
+ from instruction: %p23.332.0 = bf16[1024,3072]{1,0} parameter(23), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<435 p3.8.0 @0>
+ positions:
+  p3.8.0
+  p.23
+ uses:
+  call, operand 23
+  fusion.69, operand 2
+ from instruction: %p3.8.0 = bf16[1024]{0} parameter(3), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<436 p2.6.0 @0>
+ positions:
+  p2.6.0
+  p.24
+ uses:
+  call, operand 24
+  custom-call.21.0, operand 1
+ from instruction: %p2.6.0 = bf16[4096,1024]{1,0} parameter(2), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<437 p0.1.0 @0>
+ positions:
+  p0.1.0
+  p.25
+ uses:
+  call, operand 25
+  input_concatenate_fusion, operand 1
+ from instruction: %p0.1.0 = bf16[128]{0} parameter(0), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<438 p27.461.0 @0>
+ positions:
+  p27.461.0
+  p.26
+ uses:
+  call, operand 26
+  input_concatenate_fusion, operand 2
+ from instruction: %p27.461.0 = bf16[40960,128]{1,0} parameter(27), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<439 p26.460.0 @0>
+ positions:
+  p26.460.0
+  p.27
+ uses:
+  call, operand 27
+  input_concatenate_fusion, operand 3
+ from instruction: %p26.460.0 = s32[64]{0} parameter(26), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<440 p28.505.0 @0>
+ positions:
+  p28.505.0
+  p.28
+ uses:
+  call, operand 28
+  loop_slice_fusion, operand 0
+  wrapped_slice.1, operand 0
+ from instruction: %p28.505.0 = bf16[2,4233,16,8,128]{4,3,2,1,0} parameter(28), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch_xla/_dynamo/dynamo_bridge.py" source_line=355}
+<441 tuple.514.0{} @0>
+ positions:
+  tuple.514.0 {}
+ uses:
+ from instruction: %tuple.514.0 = (bf16[64,8,128]{2,1,0}, bf16[64,8,128]{2,1,0}, bf16[4233,16,8,128]{3,2,1,0}, bf16[4233,16,8,128]{3,2,1,0}) tuple(bf16[64,8,128]{2,1,0} %get-tuple-element.13, bf16[64,8,128]{2,1,0} %get-tuple-element.14, bf16[4233,16,8,128]{3,2,1,0} %bitcast.1328.0, bf16[4233,16,8,128]{3,2,1,0} %get-tuple-element.15)
+
+
+HloLiveRange (max 109):
+  InstructionSequence:
+    0:p1.4.0
+    1:p28.505.0
+    2:p27.461.0
+    3:p26.460.0
+    4:p25.336.0
+    5:p24.334.0
+    6:p23.332.0
+    7:p22.316.0
+    8:p21.264.0
+    9:p20.262.0
+    10:p19.260.0
+    11:p18.244.0
+    12:p17.192.0
+    13:p16.190.0
+    14:p15.188.0
+    15:p14.172.0
+    16:p13.120.0
+    17:p12.118.0
+    18:p11.116.0
+    19:p10.100.0
+    20:p9.48.0
+    21:p8.46.0
+    22:p7.44.0
+    23:p6.28.0
+    24:p5.24.0
+    25:p4.22.0
+    26:p3.8.0
+    27:p2.6.0
+    28:p0.1.0
+    29:p
+    30:p.1
+    31:p.2
+    32:p.3
+    33:p.4
+    34:p.5
+    35:p.6
+    36:p.7
+    37:p.8
+    38:p.9
+    39:p.10
+    40:p.11
+    41:p.12
+    42:p.13
+    43:p.14
+    44:p.15
+    45:p.16
+    46:p.17
+    47:p.18
+    48:p.19
+    49:p.20
+    50:p.21
+    51:p.22
+    52:p.23
+    53:p.24
+    54:p.25
+    55:p.26
+    56:p.27
+    57:p.28
+    58:loop_gather_fusion
+    59:wrapped_concatenate
+    60:gemm_fusion_dot.19.0
+    61:fusion.75
+    62:custom-call.11.0
+    63:get-tuple-element.11
+    64:loop_convert_fusion.4
+    65:custom-call.12.0
+    66:get-tuple-element.1.0
+    67:fusion.74
+    68:custom-call.13.0
+    69:get-tuple-element.2.0
+    70:loop_convert_fusion.3
+    71:custom-call.14.0
+    72:get-tuple-element.3.0
+    73:fusion.73
+    74:custom-call.15.0
+    75:get-tuple-element.4.0
+    76:loop_convert_fusion.2
+    77:custom-call.16.0
+    78:get-tuple-element.5.0
+    79:fusion.72
+    80:custom-call.17.0
+    81:get-tuple-element.6.0
+    82:loop_convert_fusion.1
+    83:custom-call.18.0
+    84:get-tuple-element.7.0
+    85:fusion.71
+    86:custom-call.19.0
+    87:get-tuple-element.8.0
+    88:loop_convert_fusion
+    89:custom-call.20.0
+    90:get-tuple-element.9.0
+    91:fusion.69
+    92:custom-call.21.0
+    93:get-tuple-element.10.0
+    94:wrapped_slice
+    95:triton_softmax.7.0
+    96:input_concatenate_fusion
+    97:bitcast.1323.0
+    98:loop_slice_fusion
+    99:bitcast.1335.0
+    100:wrapped_slice.1
+    101:tuple
+    102:call
+    103:get-tuple-element.13
+    104:get-tuple-element.14
+    105:get-tuple-element.15
+    106:get-tuple-element.16
+    107:bitcast.1328.0
+    108:tuple.514.0
+  BufferLiveRange:
+    loop_gather_fusion{}:58-91
+    wrapped_concatenate{}:59-60
+    gemm_fusion_dot.19.0{}:60-91
+    fusion.75{}:61-62
+    custom-call.11.0{}:62-63
+    custom-call.11.0{0}:62-64
+    custom-call.11.0{1}:62-62
+    loop_convert_fusion.4{}:64-65
+    custom-call.12.0{}:65-66
+    custom-call.12.0{0}:65-91
+    custom-call.12.0{1}:65-65
+    fusion.74{}:67-68
+    custom-call.13.0{}:68-69
+    custom-call.13.0{0}:68-70
+    custom-call.13.0{1}:68-68
+    loop_convert_fusion.3{}:70-71
+    custom-call.14.0{}:71-72
+    custom-call.14.0{0}:71-91
+    custom-call.14.0{1}:71-71
+    fusion.73{}:73-74
+    custom-call.15.0{}:74-75
+    custom-call.15.0{0}:74-76
+    custom-call.15.0{1}:74-74
+    loop_convert_fusion.2{}:76-77
+    custom-call.16.0{}:77-78
+    custom-call.16.0{0}:77-91
+    custom-call.16.0{1}:77-77
+    fusion.72{}:79-80
+    custom-call.17.0{}:80-81
+    custom-call.17.0{0}:80-82
+    custom-call.17.0{1}:80-80
+    loop_convert_fusion.1{}:82-83
+    custom-call.18.0{}:83-84
+    custom-call.18.0{0}:83-91
+    custom-call.18.0{1}:83-83
+    fusion.71{}:85-86
+    custom-call.19.0{}:86-87
+    custom-call.19.0{0}:86-88
+    custom-call.19.0{1}:86-86
+    loop_convert_fusion{}:88-89
+    custom-call.20.0{}:89-90
+    custom-call.20.0{0}:89-91
+    custom-call.20.0{1}:89-89
+    fusion.69{}:91-92
+    custom-call.21.0{}:92-93
+    custom-call.21.0{0}:92-95
+    custom-call.21.0{1}:92-92
+    triton_softmax.7.0{}:95-96
+    input_concatenate_fusion{}:96-109
+    wrapped_slice{}:94-109
+    loop_slice_fusion{}:98-109
+    wrapped_slice.1{}:100-109
+    tuple{}:101-106
+    p5.24.0{}:0-109
+    p4.22.0{}:0-109
+    p22.316.0{}:0-109
+    p18.244.0{}:0-109
+    p14.172.0{}:0-109
+    p10.100.0{}:0-109
+    p6.28.0{}:0-109
+    p1.4.0{}:0-109
+    p9.48.0{}:0-109
+    p8.46.0{}:0-109
+    p7.44.0{}:0-109
+    p13.120.0{}:0-109
+    p12.118.0{}:0-109
+    p11.116.0{}:0-109
+    p17.192.0{}:0-109
+    p16.190.0{}:0-109
+    p15.188.0{}:0-109
+    p21.264.0{}:0-109
+    p20.262.0{}:0-109
+    p19.260.0{}:0-109
+    p25.336.0{}:0-109
+    p24.334.0{}:0-109
+    p23.332.0{}:0-109
+    p3.8.0{}:0-109
+    p2.6.0{}:0-109
+    p0.1.0{}:0-109
+    p27.461.0{}:0-109
+    p26.460.0{}:0-109
+    p28.505.0{}:0-109
+    tuple.514.0{}:108-109
+  Live ranges at 101 (peak):
+    input_concatenate_fusion: 131072 bytes
+    wrapped_slice: 131072 bytes
+    loop_slice_fusion: 138706944 bytes
+    wrapped_slice.1: 138706944 bytes
+    tuple: 32 bytes
+    p5.24.0: 311164928 bytes
+    p4.22.0: 256 bytes
+    p22.316.0: 4194304 bytes
+    p18.244.0: 4194304 bytes
+    p14.172.0: 4194304 bytes
+    p10.100.0: 4194304 bytes
+    p6.28.0: 4194304 bytes
+    p1.4.0: 4 bytes
+    p9.48.0: 2048 bytes
+    p8.46.0: 12582912 bytes
+    p7.44.0: 6291456 bytes
+    p13.120.0: 2048 bytes
+    p12.118.0: 12582912 bytes
+    p11.116.0: 6291456 bytes
+    p17.192.0: 2048 bytes
+    p16.190.0: 12582912 bytes
+    p15.188.0: 6291456 bytes
+    p21.264.0: 2048 bytes
+    p20.262.0: 12582912 bytes
+    p19.260.0: 6291456 bytes
+    p25.336.0: 2048 bytes
+    p24.334.0: 12582912 bytes
+    p23.332.0: 6291456 bytes
+    p3.8.0: 2048 bytes
+    p2.6.0: 8388608 bytes
+    p0.1.0: 256 bytes
+    p27.461.0: 10485760 bytes
+    p26.460.0: 256 bytes
+    p28.505.0: 277413888 bytes

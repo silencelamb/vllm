@@ -1,0 +1,9 @@
+HloModule SyncTensorsGraph.5, entry_computation_layout={(f32[2,128,4096]{2,1,0})->(f32[2,128,4096]{2,1,0})}, replica_count=8
+
+ENTRY %SyncTensorsGraph.5 (p0.1: f32[2,128,4096]) -> (f32[2,128,4096]) {
+  %p0.1 = f32[2,128,4096]{2,1,0} parameter(0), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch/_prims_common/__init__.py" source_line=1991}
+  %reshape.2 = f32[1048576]{0} reshape(f32[2,128,4096]{2,1,0} %p0.1), metadata={op_type="aten__as_strided" op_name="aten__as_strided" source_file="/usr/local/lib/python3.10/site-packages/torch/_prims_common/__init__.py" source_line=1991}
+  %reshape.3 = f32[2,128,4096]{2,1,0} reshape(f32[1048576]{0} %reshape.2), metadata={op_type="aten__as_strided" op_name="aten__as_strided" source_file="/usr/local/lib/python3.10/site-packages/torch/_prims_common/__init__.py" source_line=1992}
+  ROOT %tuple.4 = (f32[2,128,4096]{2,1,0}) tuple(f32[2,128,4096]{2,1,0} %reshape.3)
+}
+

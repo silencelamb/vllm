@@ -1,0 +1,10 @@
+HloModule SyncTensorsGraph.5, is_scheduled=true, entry_computation_layout={(f32[2,128,4096]{2,1,0})->(f32[2,128,4096]{2,1,0})}, replica_count=8, frontend_attributes={fingerprint_before_lhs="c3a1eea02985d5ca8665a6916418d719"}
+
+ENTRY %SyncTensorsGraph.5 (p0.1.0: f32[2,128,4096]) -> (f32[2,128,4096]) {
+  %p0.1.0 = f32[2,128,4096]{2,1,0} parameter(0), metadata={op_type="xla__device_data" op_name="xla__device_data" source_file="/usr/local/lib/python3.10/site-packages/torch/_prims_common/__init__.py" source_line=1991}
+  %tuple = (f32[2,128,4096]{2,1,0}) tuple(f32[2,128,4096]{2,1,0} %p0.1.0)
+  %get-tuple-element.1 = f32[2,128,4096]{2,1,0} get-tuple-element((f32[2,128,4096]{2,1,0}) %tuple), index=0
+  %copy.1 = f32[2,128,4096]{2,1,0} copy(f32[2,128,4096]{2,1,0} %get-tuple-element.1)
+  ROOT %tuple.1 = (f32[2,128,4096]{2,1,0}) tuple(f32[2,128,4096]{2,1,0} %copy.1)
+}
+

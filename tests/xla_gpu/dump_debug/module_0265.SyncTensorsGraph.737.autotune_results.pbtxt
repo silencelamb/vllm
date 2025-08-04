@@ -1,0 +1,145 @@
+version: 3
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[1024,2048]{1,0} parameter(0)\n  tmp_1 = bf16[1024,2048]{1,0} parameter(1)\n  tmp_2 = bf16[1024,2048]{1,0} parameter(2)\n  tmp_3 = bf16[1024,2048]{1,0} parameter(3)\n  tmp_4 = bf16[4096,2048]{1,0} concatenate(bf16[1024,2048]{1,0} tmp_0, bf16[1024,2048]{1,0} tmp_1, bf16[1024,2048]{1,0} tmp_2, bf16[1024,2048]{1,0} tmp_3), dimensions={0}\n  tmp_5 = bf16[] constant(0)\n  tmp_6 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_5), dimensions={}\n  tmp_7 = bf16[4096,16]{0,1} dot(bf16[4096,2048]{1,0} tmp_4, bf16[16,2048]{1,0} tmp_6), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_8 = bf16[16,4096]{1,0} bitcast(bf16[4096,16]{0,1} tmp_7)\n}"
+  result {
+    run_time {
+      nanos: 29696
+    }
+    triton {
+      block_m: 128
+      block_n: 16
+      block_k: 128
+      split_k: 1
+      num_stages: 4
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[1024,2048]{1,0} parameter(0)\n  tmp_1 = bf16[1024,2048]{1,0} parameter(1)\n  tmp_2 = bf16[1024,2048]{1,0} parameter(2)\n  tmp_3 = bf16[3072,2048]{1,0} concatenate(bf16[1024,2048]{1,0} tmp_0, bf16[1024,2048]{1,0} tmp_1, bf16[1024,2048]{1,0} tmp_2), dimensions={0}\n  tmp_4 = bf16[] constant(0)\n  tmp_5 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_4), dimensions={}\n  tmp_6 = bf16[3072,16]{0,1} dot(bf16[3072,2048]{1,0} tmp_3, bf16[16,2048]{1,0} tmp_5), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_7 = bf16[16,3072]{1,0} bitcast(bf16[3072,16]{0,1} tmp_6)\n}"
+  result {
+    run_time {
+      nanos: 30720
+    }
+    triton {
+      block_m: 64
+      block_n: 16
+      block_k: 128
+      split_k: 1
+      num_stages: 4
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[1024,2048]{1,0} parameter(0)\n  tmp_1 = bf16[1024,2048]{1,0} parameter(1)\n  tmp_2 = bf16[2048,2048]{1,0} concatenate(bf16[1024,2048]{1,0} tmp_0, bf16[1024,2048]{1,0} tmp_1), dimensions={0}\n  tmp_3 = bf16[] constant(0)\n  tmp_4 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_3), dimensions={}\n  tmp_5 = bf16[2048,16]{0,1} dot(bf16[2048,2048]{1,0} tmp_2, bf16[16,2048]{1,0} tmp_4), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_6 = bf16[16,2048]{1,0} bitcast(bf16[2048,16]{0,1} tmp_5)\n}"
+  result {
+    run_time {
+      nanos: 22528
+    }
+    triton {
+      block_m: 16
+      block_n: 16
+      block_k: 256
+      split_k: 1
+      num_stages: 3
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[1024,2048]{1,0} parameter(0)\n  tmp_1 = bf16[] constant(0)\n  tmp_2 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_1), dimensions={}\n  tmp_3 = bf16[1024,16]{0,1} dot(bf16[1024,2048]{1,0} tmp_0, bf16[16,2048]{1,0} tmp_2), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_4 = bf16[16,1024]{1,0} bitcast(bf16[1024,16]{0,1} tmp_3)\n}"
+  result {
+    run_time {
+      nanos: 32768
+    }
+    triton {
+      block_m: 16
+      block_n: 16
+      block_k: 256
+      split_k: 1
+      num_stages: 3
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[5120,2048]{1,0} parameter(0)\n  tmp_1 = bf16[] constant(0)\n  tmp_2 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_1), dimensions={}\n  tmp_3 = bf16[5120,16]{0,1} dot(bf16[5120,2048]{1,0} tmp_0, bf16[16,2048]{1,0} tmp_2), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_4 = bf16[16,5120]{1,0} bitcast(bf16[5120,16]{0,1} tmp_3)\n}"
+  result {
+    run_time {
+      nanos: 32768
+    }
+    triton {
+      block_m: 128
+      block_n: 16
+      block_k: 128
+      split_k: 1
+      num_stages: 4
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[6144,2048]{1,0} parameter(0)\n  tmp_1 = bf16[] constant(0)\n  tmp_2 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_1), dimensions={}\n  tmp_3 = bf16[6144,16]{0,1} dot(bf16[6144,2048]{1,0} tmp_0, bf16[16,2048]{1,0} tmp_2), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_4 = bf16[16,6144]{1,0} bitcast(bf16[6144,16]{0,1} tmp_3)\n}"
+  result {
+    run_time {
+      nanos: 36864
+    }
+    triton {
+      block_m: 64
+      block_n: 16
+      block_k: 128
+      split_k: 1
+      num_stages: 4
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[7168,2048]{1,0} parameter(0)\n  tmp_1 = bf16[] constant(0)\n  tmp_2 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_1), dimensions={}\n  tmp_3 = bf16[7168,16]{0,1} dot(bf16[7168,2048]{1,0} tmp_0, bf16[16,2048]{1,0} tmp_2), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_4 = bf16[16,7168]{1,0} bitcast(bf16[7168,16]{0,1} tmp_3)\n}"
+  result {
+    run_time {
+      nanos: 40960
+    }
+    triton {
+      block_m: 256
+      block_n: 16
+      block_k: 128
+      split_k: 1
+      num_stages: 3
+      num_warps: 8
+      num_ctas: 1
+    }
+  }
+}
+results {
+  device: "CUDA: 8.0, Cores: 108, GPU clock: 1.41 GHz, Memory bandwidth: 2039 GB/s, L2 cache: 40 MB"
+  hlo: "{\n  tmp_0 = bf16[8192,2048]{1,0} parameter(0)\n  tmp_1 = bf16[] constant(0)\n  tmp_2 = bf16[16,2048]{1,0} broadcast(bf16[] tmp_1), dimensions={}\n  tmp_3 = bf16[8192,16]{0,1} dot(bf16[8192,2048]{1,0} tmp_0, bf16[16,2048]{1,0} tmp_2), lhs_contracting_dims={1}, rhs_contracting_dims={1}\n  ROOT tmp_4 = bf16[16,8192]{1,0} bitcast(bf16[8192,16]{0,1} tmp_3)\n}"
+  result {
+    run_time {
+      nanos: 47104
+    }
+    triton {
+      block_m: 128
+      block_n: 16
+      block_k: 128
+      split_k: 1
+      num_stages: 4
+      num_warps: 4
+      num_ctas: 1
+    }
+  }
+}

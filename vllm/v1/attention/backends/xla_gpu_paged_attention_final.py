@@ -18,9 +18,12 @@ logger = init_logger(__name__)
 
 # Try to import flash attention functions
 try:
-    from vllm.attention.utils.fa_utils import flash_attn_varlen_func
-    from vllm._custom_ops import reshape_and_cache_flash
+    from vllm import _custom_ops as ops
+    reshape_and_cache_flash = ops.reshape_and_cache_flash
+    from vllm.vllm_flash_attn import (flash_attn_varlen_func,
+                                      get_scheduler_metadata)
     FLASH_ATTN_AVAILABLE = True
+    logger.info("Flash Attention available, using optimized implementation")
 except ImportError:
     FLASH_ATTN_AVAILABLE = False
     logger.warning("Flash Attention not available, using fallback implementation")

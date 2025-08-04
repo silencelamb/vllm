@@ -1,0 +1,130 @@
+#indexing_map = #xla.indexing_map<"(tid_0) -> (tid_0 * 1024), domain: tid_0 in [0, 63]">
+#indexing_map1 = #xla.indexing_map<"(tid_0) -> (tid_0 * 6144), domain: tid_0 in [0, 63]">
+#indexing_map2 = #xla.indexing_map<"(tid_0) -> (tid_0 * 6144 + 1024), domain: tid_0 in [0, 63]">
+#indexing_map3 = #xla.indexing_map<"(tid_0) -> (tid_0 * 6144 + 2048), domain: tid_0 in [0, 63]">
+#indexing_map4 = #xla.indexing_map<"(tid_0) -> (tid_0 * 6144 + 3072), domain: tid_0 in [0, 63]">
+#indexing_map5 = #xla.indexing_map<"(tid_0) -> (tid_0 * 6144 + 4096), domain: tid_0 in [0, 63]">
+#indexing_map6 = #xla.indexing_map<"(tid_0) -> (tid_0 * 6144 + 5120), domain: tid_0 in [0, 63]">
+module {
+  tt.func @fusion_80_impl(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg3: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg4: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg5: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg6: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg7: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg8: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg9: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg10: !tt.ptr<bf16> {tt.divisibility = 16 : i32}) {
+    %cst = arith.constant dense<9.765625E-4> : tensor<1xf32>
+    %c2048_i64 = arith.constant 2048 : i64
+    %c3072_i64 = arith.constant 3072 : i64
+    %c4096_i64 = arith.constant 4096 : i64
+    %c5120_i64 = arith.constant 5120 : i64
+    %c0_i64 = arith.constant 0 : i64
+    %c6144_i64 = arith.constant 6144 : i64
+    %c0_i32 = arith.constant 0 : i32
+    %c64_i64 = arith.constant 64 : i64
+    %c1024_i64 = arith.constant 1024 : i64
+    %c1_i64 = arith.constant 1 : i64
+    %0 = tt.get_program_id x : i32
+    %1 = arith.extsi %0 : i32 to i64
+    %2 = arith.index_castui %1 : i64 to index
+    %3 = arith.subi %c64_i64, %1 : i64
+    %4 = xla.apply_indexing #indexing_map(%2)
+    %5 = arith.index_castui %4 : index to i64
+    %6 = tt.addptr %arg1, %5 : !tt.ptr<bf16>, i64
+    %7 = tt.make_tensor_ptr %6, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %8 = tt.load %7 : !tt.ptr<tensor<1x1024xbf16>>
+    %9 = arith.extf %8 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %10 = xla.apply_indexing #indexing_map1(%2)
+    %11 = arith.index_castui %10 : index to i64
+    %12 = tt.addptr %arg4, %11 : !tt.ptr<bf16>, i64
+    %13 = tt.make_tensor_ptr %12, [%3, %c6144_i64], [%c6144_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %14 = tt.load %13 : !tt.ptr<tensor<1x1024xbf16>>
+    %15 = arith.extf %14 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %16 = tt.addptr %arg5, %5 : !tt.ptr<bf16>, i64
+    %17 = tt.make_tensor_ptr %16, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %18 = tt.load %17 : !tt.ptr<tensor<1x1024xbf16>>
+    %19 = arith.extf %18 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %20 = xla.apply_indexing #indexing_map2(%2)
+    %21 = arith.index_castui %20 : index to i64
+    %22 = tt.addptr %arg4, %21 : !tt.ptr<bf16>, i64
+    %23 = tt.make_tensor_ptr %22, [%3, %c5120_i64], [%c6144_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %24 = tt.load %23 : !tt.ptr<tensor<1x1024xbf16>>
+    %25 = arith.extf %24 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %26 = tt.addptr %arg3, %5 : !tt.ptr<bf16>, i64
+    %27 = tt.make_tensor_ptr %26, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %28 = tt.load %27 : !tt.ptr<tensor<1x1024xbf16>>
+    %29 = arith.extf %28 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %30 = xla.apply_indexing #indexing_map3(%2)
+    %31 = arith.index_castui %30 : index to i64
+    %32 = tt.addptr %arg4, %31 : !tt.ptr<bf16>, i64
+    %33 = tt.make_tensor_ptr %32, [%3, %c4096_i64], [%c6144_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %34 = tt.load %33 : !tt.ptr<tensor<1x1024xbf16>>
+    %35 = arith.extf %34 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %36 = tt.addptr %arg9, %5 : !tt.ptr<bf16>, i64
+    %37 = tt.make_tensor_ptr %36, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %38 = tt.load %37 : !tt.ptr<tensor<1x1024xbf16>>
+    %39 = arith.extf %38 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %40 = xla.apply_indexing #indexing_map4(%2)
+    %41 = arith.index_castui %40 : index to i64
+    %42 = tt.addptr %arg4, %41 : !tt.ptr<bf16>, i64
+    %43 = tt.make_tensor_ptr %42, [%3, %c3072_i64], [%c6144_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %44 = tt.load %43 : !tt.ptr<tensor<1x1024xbf16>>
+    %45 = arith.extf %44 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %46 = tt.addptr %arg8, %5 : !tt.ptr<bf16>, i64
+    %47 = tt.make_tensor_ptr %46, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %48 = tt.load %47 : !tt.ptr<tensor<1x1024xbf16>>
+    %49 = arith.extf %48 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %50 = xla.apply_indexing #indexing_map5(%2)
+    %51 = arith.index_castui %50 : index to i64
+    %52 = tt.addptr %arg4, %51 : !tt.ptr<bf16>, i64
+    %53 = tt.make_tensor_ptr %52, [%3, %c2048_i64], [%c6144_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %54 = tt.load %53 : !tt.ptr<tensor<1x1024xbf16>>
+    %55 = arith.extf %54 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %56 = tt.addptr %arg7, %5 : !tt.ptr<bf16>, i64
+    %57 = tt.make_tensor_ptr %56, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %58 = tt.load %57 : !tt.ptr<tensor<1x1024xbf16>>
+    %59 = arith.extf %58 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %60 = xla.apply_indexing #indexing_map6(%2)
+    %61 = arith.index_castui %60 : index to i64
+    %62 = tt.addptr %arg4, %61 : !tt.ptr<bf16>, i64
+    %63 = tt.make_tensor_ptr %62, [%3, %c1024_i64], [%c6144_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %64 = tt.load %63 : !tt.ptr<tensor<1x1024xbf16>>
+    %65 = arith.extf %64 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %66 = tt.addptr %arg6, %5 : !tt.ptr<bf16>, i64
+    %67 = tt.make_tensor_ptr %66, [%3, %c1_i64, %c1024_i64], [%c1024_i64, %c0_i64, %c1_i64], [%c0_i32, %c0_i32, %c0_i32] {order = array<i32: 2, 1, 0>} : <tensor<1x1x1024xbf16>>
+    %68 = tt.load %67 : !tt.ptr<tensor<1x1x1024xbf16>>
+    %69 = tt.trans %68 {order = array<i32: 1, 0, 2>} : tensor<1x1x1024xbf16> -> tensor<1x1x1024xbf16>
+    %70 = tt.reshape %69 : tensor<1x1x1024xbf16> -> tensor<1x1024xbf16>
+    %71 = arith.extf %70 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %72 = arith.addf %65, %71 : tensor<1x1024xf32>
+    %73 = arith.addf %59, %72 : tensor<1x1024xf32>
+    %74 = arith.addf %55, %73 : tensor<1x1024xf32>
+    %75 = arith.addf %49, %74 : tensor<1x1024xf32>
+    %76 = arith.addf %45, %75 : tensor<1x1024xf32>
+    %77 = arith.addf %39, %76 : tensor<1x1024xf32>
+    %78 = arith.addf %35, %77 : tensor<1x1024xf32>
+    %79 = arith.addf %29, %78 : tensor<1x1024xf32>
+    %80 = arith.addf %25, %79 : tensor<1x1024xf32>
+    %81 = arith.addf %19, %80 : tensor<1x1024xf32>
+    %82 = arith.addf %15, %81 : tensor<1x1024xf32>
+    %83 = arith.addf %9, %82 : tensor<1x1024xf32>
+    %84 = arith.mulf %83, %83 : tensor<1x1024xf32>
+    %85 = "tt.reduce"(%84) <{axis = 1 : i32}> ({
+    ^bb0(%arg11: f32, %arg12: f32):
+      %102 = arith.addf %arg11, %arg12 : f32
+      tt.reduce.return %102 : f32
+    }) : (tensor<1x1024xf32>) -> tensor<1xf32>
+    %86 = arith.mulf %85, %cst : tensor<1xf32>
+    %87 = tt.load %arg0 : !tt.ptr<f32>
+    %88 = tt.splat %87 : f32 -> tensor<1xf32>
+    %89 = arith.addf %86, %88 : tensor<1xf32>
+    %90 = tt.extern_elementwise %89 {libname = "libdevice", libpath = "/usr/local/cuda-12.6/nvvm/libdevice/libdevice.10.bc", pure = true, symbol = "__nv_rsqrtf"} : (tensor<1xf32>) -> tensor<1xf32>
+    %91 = tt.expand_dims %90 {axis = 1 : i32} : tensor<1xf32> -> tensor<1x1xf32>
+    %92 = tt.broadcast %91 : tensor<1x1xf32> -> tensor<1x1024xf32>
+    %93 = arith.mulf %83, %92 : tensor<1x1024xf32>
+    %94 = tt.make_tensor_ptr %arg2, [%c1024_i64], [%c1_i64], [%c0_i32] {order = array<i32: 0>} : <tensor<1024xbf16>>
+    %95 = tt.load %94 : !tt.ptr<tensor<1024xbf16>>
+    %96 = arith.extf %95 : tensor<1024xbf16> to tensor<1024xf32>
+    %97 = tt.expand_dims %96 {axis = 0 : i32} : tensor<1024xf32> -> tensor<1x1024xf32>
+    %98 = arith.mulf %93, %97 : tensor<1x1024xf32>
+    %99 = arith.truncf %98 : tensor<1x1024xf32> to tensor<1x1024xbf16>
+    %100 = tt.addptr %arg10, %5 : !tt.ptr<bf16>, i64
+    %101 = tt.make_tensor_ptr %100, [%3, %c1024_i64], [%c1024_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    tt.store %101, %99 : !tt.ptr<tensor<1x1024xbf16>>
+    tt.return
+  }
+}

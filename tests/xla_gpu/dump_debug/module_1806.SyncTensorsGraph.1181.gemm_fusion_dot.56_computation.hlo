@@ -1,0 +1,7 @@
+%gemm_fusion_dot.56_computation (parameter_0: bf16[14336,2048]) -> bf16[32,14336] {
+  %parameter_0 = bf16[14336,2048]{1,0} parameter(0)
+  %constant_155 = bf16[] constant(0), metadata={op_type="aten__expand" op_name="aten__expand" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.128 = bf16[32,2048]{1,0} broadcast(bf16[] %constant_155), dimensions={}, metadata={op_type="aten__expand" op_name="aten__expand" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %dot.58 = bf16[14336,32]{0,1} dot(bf16[14336,2048]{1,0} %parameter_0, bf16[32,2048]{1,0} %broadcast.128), lhs_contracting_dims={1}, rhs_contracting_dims={1}, metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  ROOT %bitcast.1111 = bf16[32,14336]{1,0} bitcast(bf16[14336,32]{0,1} %dot.58), metadata={op_type="aten__mm" op_name="aten__mm" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+}

@@ -121,7 +121,7 @@ def test_xla_rms_norm_capture():
         # Get XLA metrics
         import torch_xla.debug.metrics as met
         print("XLA Metrics:")
-        print(met.metrics_report())
+        # print(met.metrics_report())
     except Exception as e:
         print(f"Could not retrieve XLA metrics: {e}")
     

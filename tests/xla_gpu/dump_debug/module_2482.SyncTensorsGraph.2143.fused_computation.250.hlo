@@ -1,0 +1,22 @@
+%fused_computation.250 (param_0.1215: f32[], param_1.1032: bf16[32,4096], param_2.666: bf16[128]) -> f32[32,8,128] {
+  %param_1.1032 = bf16[32,4096]{1,0} parameter(1)
+  %slice.430.1 = bf16[32,1024]{1,0} slice(bf16[32,4096]{1,0} %param_1.1032), slice={[0:32], [2048:3072]}, metadata={op_type="aten__split" op_name="aten__split" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %bitcast.5364.5 = bf16[32,8,128]{2,1,0} bitcast(bf16[32,1024]{1,0} %slice.430.1)
+  %convert.1668.5 = f32[32,8,128]{2,1,0} convert(bf16[32,8,128]{2,1,0} %bitcast.5364.5), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.714 = f32[32,8,128]{2,1,0} multiply(f32[32,8,128]{2,1,0} %convert.1668.5, f32[32,8,128]{2,1,0} %convert.1668.5), metadata={op_type="aten__pow" op_name="aten__pow" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %constant_695 = f32[] constant(0), metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %reduce.59 = f32[32,8]{1,0} reduce(f32[32,8,128]{2,1,0} %multiply.714, f32[] %constant_695), dimensions={2}, to_apply=%AddComputation.100, metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %constant_694 = f32[] constant(0.0078125), metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.820 = f32[32,8]{1,0} broadcast(f32[] %constant_694), dimensions={}, metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.713 = f32[32,8]{1,0} multiply(f32[32,8]{1,0} %reduce.59, f32[32,8]{1,0} %broadcast.820), metadata={op_type="aten__mean" op_name="aten__mean" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_0.1215 = f32[] parameter(0)
+  %broadcast.819 = f32[32,8]{1,0} broadcast(f32[] %param_0.1215), dimensions={}, metadata={op_type="aten__add" op_name="aten__add.997/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %add.442 = f32[32,8]{1,0} add(f32[32,8]{1,0} %multiply.713, f32[32,8]{1,0} %broadcast.819), metadata={op_type="aten__add" op_name="aten__add.997/aten__add" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %rsqrt.147 = f32[32,8]{1,0} rsqrt(f32[32,8]{1,0} %add.442), metadata={op_type="aten__rsqrt" op_name="aten__rsqrt" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.818 = f32[32,8,128]{2,1,0} broadcast(f32[32,8]{1,0} %rsqrt.147), dimensions={0,1}, metadata={op_type="aten__mul" op_name="aten__mul.998/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %multiply.712 = f32[32,8,128]{2,1,0} multiply(f32[32,8,128]{2,1,0} %convert.1668.5, f32[32,8,128]{2,1,0} %broadcast.818), metadata={op_type="aten__mul" op_name="aten__mul.998/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %param_2.666 = bf16[128]{0} parameter(2)
+  %convert.1669.1 = f32[128]{0} convert(bf16[128]{0} %param_2.666), metadata={op_type="xla__cast" op_name="xla__cast" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  %broadcast.686.1 = f32[32,8,128]{2,1,0} broadcast(f32[128]{0} %convert.1669.1), dimensions={2}, metadata={op_type="aten__mul" op_name="aten__mul.999/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+  ROOT %multiply.701.1 = f32[32,8,128]{2,1,0} multiply(f32[32,8,128]{2,1,0} %multiply.712, f32[32,8,128]{2,1,0} %broadcast.686.1), metadata={op_type="aten__mul" op_name="aten__mul.999/aten__mul" source_file="/usr/local/lib/python3.10/site-packages/torch/_ops.py" source_line=756}
+}

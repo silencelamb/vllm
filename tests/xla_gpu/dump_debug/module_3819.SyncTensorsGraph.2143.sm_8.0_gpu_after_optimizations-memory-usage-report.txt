@@ -1,0 +1,282 @@
+Total bytes used: 1509752528 (1.41GiB)
+
+Allocations sorted by size:
+
+cumulative_size; total_size - cumulative_size; allocation
+------------------------------------------------------------------------------
+ 296.75MiB( 21%);    1.12GiB; allocation 0: size 296.75MiB, parameter 5, shape |bf16[151936,1024]| at ShapeIndex {}:
+ 561.31MiB( 39%);  878.50MiB; allocation 1: size 264.56MiB, parameter 116, shape |bf16[2,4233,16,8,128]| at ShapeIndex {}:
+ 693.59MiB( 48%);  746.22MiB; allocation 2: size 132.28MiB, maybe-live-out:
+ 825.88MiB( 57%);  613.94MiB; allocation 3: size 132.28MiB, maybe-live-out:
+ 837.88MiB( 58%);  601.94MiB; allocation 4: size 12.00MiB, parameter 8, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 849.88MiB( 59%);  589.94MiB; allocation 5: size 12.00MiB, parameter 12, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 861.88MiB( 60%);  577.94MiB; allocation 6: size 12.00MiB, parameter 16, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 873.88MiB( 61%);  565.94MiB; allocation 7: size 12.00MiB, parameter 20, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 885.88MiB( 62%);  553.94MiB; allocation 8: size 12.00MiB, parameter 24, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 897.88MiB( 62%);  541.94MiB; allocation 9: size 12.00MiB, parameter 28, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 909.88MiB( 63%);  529.94MiB; allocation 10: size 12.00MiB, parameter 32, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 921.88MiB( 64%);  517.94MiB; allocation 11: size 12.00MiB, parameter 36, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 933.88MiB( 65%);  505.94MiB; allocation 12: size 12.00MiB, parameter 40, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 945.88MiB( 66%);  493.94MiB; allocation 13: size 12.00MiB, parameter 44, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 957.88MiB( 67%);  481.94MiB; allocation 14: size 12.00MiB, parameter 48, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 969.88MiB( 67%);  469.94MiB; allocation 15: size 12.00MiB, parameter 52, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 981.88MiB( 68%);  457.94MiB; allocation 16: size 12.00MiB, parameter 56, shape |bf16[6144,1024]| at ShapeIndex {}:
+ 993.88MiB( 69%);  445.94MiB; allocation 17: size 12.00MiB, parameter 60, shape |bf16[6144,1024]| at ShapeIndex {}:
+1005.88MiB( 70%);  433.94MiB; allocation 18: size 12.00MiB, parameter 64, shape |bf16[6144,1024]| at ShapeIndex {}:
+1017.88MiB( 71%);  421.94MiB; allocation 19: size 12.00MiB, parameter 68, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.00GiB( 72%);  409.94MiB; allocation 20: size 12.00MiB, parameter 72, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.02GiB( 72%);  397.94MiB; allocation 21: size 12.00MiB, parameter 76, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.03GiB( 73%);  385.94MiB; allocation 22: size 12.00MiB, parameter 80, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.04GiB( 74%);  373.94MiB; allocation 23: size 12.00MiB, parameter 84, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.05GiB( 75%);  361.94MiB; allocation 24: size 12.00MiB, parameter 88, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.06GiB( 76%);  349.94MiB; allocation 25: size 12.00MiB, parameter 92, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.08GiB( 77%);  337.94MiB; allocation 26: size 12.00MiB, parameter 96, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.09GiB( 77%);  325.94MiB; allocation 27: size 12.00MiB, parameter 100, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.10GiB( 78%);  313.94MiB; allocation 28: size 12.00MiB, parameter 104, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.11GiB( 79%);  301.94MiB; allocation 29: size 12.00MiB, parameter 108, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.12GiB( 80%);  289.94MiB; allocation 30: size 12.00MiB, parameter 112, shape |bf16[6144,1024]| at ShapeIndex {}:
+   1.13GiB( 81%);  279.94MiB; allocation 31: size 10.00MiB, parameter 115, shape |bf16[40960,128]| at ShapeIndex {}:
+   1.14GiB( 81%);  271.94MiB; allocation 32: size 8.00MiB, parameter 2, shape |bf16[4096,1024]| at ShapeIndex {}:
+   1.15GiB( 82%);  265.94MiB; allocation 33: size 6.00MiB, parameter 7, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.15GiB( 82%);  259.94MiB; allocation 34: size 6.00MiB, parameter 11, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.16GiB( 82%);  253.94MiB; allocation 35: size 6.00MiB, parameter 15, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.16GiB( 83%);  247.94MiB; allocation 36: size 6.00MiB, parameter 19, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.17GiB( 83%);  241.94MiB; allocation 37: size 6.00MiB, parameter 23, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.17GiB( 84%);  235.94MiB; allocation 38: size 6.00MiB, parameter 27, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.18GiB( 84%);  229.94MiB; allocation 39: size 6.00MiB, parameter 31, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.19GiB( 84%);  223.94MiB; allocation 40: size 6.00MiB, parameter 35, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.19GiB( 85%);  217.94MiB; allocation 41: size 6.00MiB, parameter 39, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.20GiB( 85%);  211.94MiB; allocation 42: size 6.00MiB, parameter 43, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.20GiB( 86%);  205.94MiB; allocation 43: size 6.00MiB, parameter 47, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.21GiB( 86%);  199.94MiB; allocation 44: size 6.00MiB, parameter 51, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.22GiB( 87%);  193.94MiB; allocation 45: size 6.00MiB, parameter 55, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.22GiB( 87%);  187.94MiB; allocation 46: size 6.00MiB, parameter 59, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.23GiB( 87%);  181.94MiB; allocation 47: size 6.00MiB, parameter 63, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.23GiB( 88%);  175.94MiB; allocation 48: size 6.00MiB, parameter 67, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.24GiB( 88%);  169.94MiB; allocation 49: size 6.00MiB, parameter 71, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.25GiB( 89%);  163.94MiB; allocation 50: size 6.00MiB, parameter 75, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.25GiB( 89%);  157.94MiB; allocation 51: size 6.00MiB, parameter 79, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.26GiB( 89%);  151.94MiB; allocation 52: size 6.00MiB, parameter 83, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.26GiB( 90%);  145.94MiB; allocation 53: size 6.00MiB, parameter 87, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.27GiB( 90%);  139.94MiB; allocation 54: size 6.00MiB, parameter 91, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.27GiB( 91%);  133.94MiB; allocation 55: size 6.00MiB, parameter 95, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.28GiB( 91%);  127.94MiB; allocation 56: size 6.00MiB, parameter 99, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.29GiB( 92%);  121.94MiB; allocation 57: size 6.00MiB, parameter 103, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.29GiB( 92%);  115.94MiB; allocation 58: size 6.00MiB, parameter 107, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.30GiB( 92%);  109.94MiB; allocation 59: size 6.00MiB, parameter 111, shape |bf16[1024,3072]| at ShapeIndex {}:
+   1.30GiB( 93%);  105.94MiB; allocation 60: size 4.00MiB, parameter 110, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.31GiB( 93%);  101.94MiB; allocation 61: size 4.00MiB, parameter 106, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.31GiB( 93%);   97.94MiB; allocation 62: size 4.00MiB, parameter 102, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.31GiB( 93%);   93.94MiB; allocation 63: size 4.00MiB, parameter 98, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.32GiB( 94%);   89.94MiB; allocation 64: size 4.00MiB, parameter 94, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.32GiB( 94%);   85.94MiB; allocation 65: size 4.00MiB, parameter 90, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.33GiB( 94%);   81.94MiB; allocation 66: size 4.00MiB, parameter 86, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.33GiB( 95%);   77.94MiB; allocation 67: size 4.00MiB, parameter 82, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.33GiB( 95%);   73.94MiB; allocation 68: size 4.00MiB, parameter 78, shape |bf16[1024,2048]| at ShapeIndex {}:
+   1.34GiB( 95%);   69.94MiB; allocation 69: size 4.00MiB, parameter 74, shape |bf16[1024,2048]| at ShapeIndex {}:
+The rest 56 allocations are less than 5% of the total size and not shown.
+
+
+Allocations sorted by size with their values:
+allocation 0: size 296.75MiB, parameter 5, shape |bf16[151936,1024]| at ShapeIndex {}:
+allocation 1: size 264.56MiB, parameter 116, shape |bf16[2,4233,16,8,128]| at ShapeIndex {}:
+allocation 2: size 132.28MiB, maybe-live-out:
+
+	cumulative_size;       size;       offset; used_by_n_values; shapes_list
+	------------------------------------------------------------
+	132.28MiB(100%);  132.28MiB;            0;                3; bf16[64,27648], bf16[64,4096], bf16[69353472]
+
+allocation 3: size 132.28MiB, maybe-live-out:
+
+	cumulative_size;       size;       offset; used_by_n_values; shapes_list
+	------------------------------------------------------------
+	132.28MiB(100%);  132.28MiB;            0;               58; bf16[27648,2048], bf16[1,4233,16,8,128], f32[64,8,128], 55×s8[4194304]
+
+allocation 4: size 12.00MiB, parameter 8, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 5: size 12.00MiB, parameter 12, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 6: size 12.00MiB, parameter 16, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 7: size 12.00MiB, parameter 20, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 8: size 12.00MiB, parameter 24, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 9: size 12.00MiB, parameter 28, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 10: size 12.00MiB, parameter 32, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 11: size 12.00MiB, parameter 36, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 12: size 12.00MiB, parameter 40, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 13: size 12.00MiB, parameter 44, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 14: size 12.00MiB, parameter 48, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 15: size 12.00MiB, parameter 52, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 16: size 12.00MiB, parameter 56, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 17: size 12.00MiB, parameter 60, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 18: size 12.00MiB, parameter 64, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 19: size 12.00MiB, parameter 68, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 20: size 12.00MiB, parameter 72, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 21: size 12.00MiB, parameter 76, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 22: size 12.00MiB, parameter 80, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 23: size 12.00MiB, parameter 84, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 24: size 12.00MiB, parameter 88, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 25: size 12.00MiB, parameter 92, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 26: size 12.00MiB, parameter 96, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 27: size 12.00MiB, parameter 100, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 28: size 12.00MiB, parameter 104, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 29: size 12.00MiB, parameter 108, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 30: size 12.00MiB, parameter 112, shape |bf16[6144,1024]| at ShapeIndex {}:
+allocation 31: size 10.00MiB, parameter 115, shape |bf16[40960,128]| at ShapeIndex {}:
+allocation 32: size 8.00MiB, parameter 2, shape |bf16[4096,1024]| at ShapeIndex {}:
+allocation 33: size 6.00MiB, parameter 7, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 34: size 6.00MiB, parameter 11, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 35: size 6.00MiB, parameter 15, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 36: size 6.00MiB, parameter 19, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 37: size 6.00MiB, parameter 23, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 38: size 6.00MiB, parameter 27, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 39: size 6.00MiB, parameter 31, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 40: size 6.00MiB, parameter 35, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 41: size 6.00MiB, parameter 39, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 42: size 6.00MiB, parameter 43, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 43: size 6.00MiB, parameter 47, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 44: size 6.00MiB, parameter 51, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 45: size 6.00MiB, parameter 55, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 46: size 6.00MiB, parameter 59, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 47: size 6.00MiB, parameter 63, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 48: size 6.00MiB, parameter 67, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 49: size 6.00MiB, parameter 71, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 50: size 6.00MiB, parameter 75, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 51: size 6.00MiB, parameter 79, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 52: size 6.00MiB, parameter 83, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 53: size 6.00MiB, parameter 87, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 54: size 6.00MiB, parameter 91, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 55: size 6.00MiB, parameter 95, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 56: size 6.00MiB, parameter 99, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 57: size 6.00MiB, parameter 103, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 58: size 6.00MiB, parameter 107, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 59: size 6.00MiB, parameter 111, shape |bf16[1024,3072]| at ShapeIndex {}:
+allocation 60: size 4.00MiB, parameter 110, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 61: size 4.00MiB, parameter 106, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 62: size 4.00MiB, parameter 102, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 63: size 4.00MiB, parameter 98, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 64: size 4.00MiB, parameter 94, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 65: size 4.00MiB, parameter 90, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 66: size 4.00MiB, parameter 86, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 67: size 4.00MiB, parameter 82, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 68: size 4.00MiB, parameter 78, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 69: size 4.00MiB, parameter 74, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 70: size 4.00MiB, parameter 70, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 71: size 4.00MiB, parameter 66, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 72: size 4.00MiB, parameter 62, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 73: size 4.00MiB, parameter 58, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 74: size 4.00MiB, parameter 54, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 75: size 4.00MiB, parameter 50, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 76: size 4.00MiB, parameter 46, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 77: size 4.00MiB, parameter 42, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 78: size 4.00MiB, parameter 38, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 79: size 4.00MiB, parameter 34, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 80: size 4.00MiB, parameter 30, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 81: size 4.00MiB, parameter 26, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 82: size 4.00MiB, parameter 22, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 83: size 4.00MiB, parameter 18, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 84: size 4.00MiB, parameter 14, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 85: size 4.00MiB, parameter 10, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 86: size 4.00MiB, parameter 6, shape |bf16[1024,2048]| at ShapeIndex {}:
+allocation 125: size 1.63MiB, preallocated-temp:
+
+	cumulative_size;       size;       offset; used_by_n_values; shapes_list
+	------------------------------------------------------------
+	 768.0KiB( 43%);   768.0KiB;         6784;               34; 27×bf16[64,6144], 7×bf16[64,1024]
+	  1.12MiB( 64%);   384.0KiB;       793216;               41; 27×bf16[64,3072], 14×bf16[64,1024]
+	  1.38MiB( 79%);   256.0KiB;      1186432;                6; 6×f32[64,1024]
+	  1.50MiB( 86%);   128.0KiB;      1579648;                1; bf16[64,1024]
+	  1.62MiB( 93%);   128.0KiB;       137856;                1; bf16[64,1024]
+	  1.75MiB(100%);   128.0KiB;      1448576;                6; 6×bf16[64,1024]
+	  1.75MiB(100%);        32B;      1710976;                1; (bf16[64,8,128], bf16[64,8,128], bf16[4233,16,8,128], bf16[1,4233,16,8,128])
+	  1.75MiB(100%);        16B;         6144;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         4608;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         1792;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         4736;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         2560;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         3968;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         6656;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         5376;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         3200;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         1152;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         1920;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         2688;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         3328;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;          384;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         4864;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;          640;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         6272;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         4096;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         2816;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         2048;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         5504;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         6528;                1; (bf16[64,4096], s8[4194304])
+	  1.75MiB(100%);        16B;          512;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         3456;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         5632;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         4224;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         1280;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;          768;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         1536;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         5760;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         4992;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;          128;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         2944;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         6400;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         3584;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         1408;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         4352;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;            0;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         5120;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         2176;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         3712;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;         2304;                1; (bf16[64,1024], s8[4194304])
+	  1.75MiB(100%);        16B;         2432;                1; (bf16[64,6144], s8[4194304])
+	  1.75MiB(100%);        16B;      1710720;                1; (bf16[64,1024], s8[4194304])
+	The rest 11 values are less than 5% of the total size and not shown.
+
+allocation 87: size 128.0KiB, maybe-live-out:
+
+	cumulative_size;       size;       offset; used_by_n_values; shapes_list
+	------------------------------------------------------------
+	 128.0KiB(100%);   128.0KiB;            0;               15; bf16[64,8,128], 14×bf16[64,1024]
+
+allocation 88: size 128.0KiB, maybe-live-out:
+
+	cumulative_size;       size;       offset; used_by_n_values; shapes_list
+	------------------------------------------------------------
+	 128.0KiB(100%);   128.0KiB;            0;               14; bf16[64,1,1024], 13×bf16[64,1024]
+
+allocation 89: size 2.0KiB, parameter 9, shape |bf16[1024]| at ShapeIndex {}:
+allocation 90: size 2.0KiB, parameter 13, shape |bf16[1024]| at ShapeIndex {}:
+allocation 91: size 2.0KiB, parameter 17, shape |bf16[1024]| at ShapeIndex {}:
+allocation 92: size 2.0KiB, parameter 21, shape |bf16[1024]| at ShapeIndex {}:
+allocation 93: size 2.0KiB, parameter 25, shape |bf16[1024]| at ShapeIndex {}:
+allocation 94: size 2.0KiB, parameter 29, shape |bf16[1024]| at ShapeIndex {}:
+allocation 95: size 2.0KiB, parameter 33, shape |bf16[1024]| at ShapeIndex {}:
+allocation 96: size 2.0KiB, parameter 37, shape |bf16[1024]| at ShapeIndex {}:
+allocation 97: size 2.0KiB, parameter 41, shape |bf16[1024]| at ShapeIndex {}:
+allocation 98: size 2.0KiB, parameter 45, shape |bf16[1024]| at ShapeIndex {}:
+allocation 99: size 2.0KiB, parameter 49, shape |bf16[1024]| at ShapeIndex {}:
+allocation 100: size 2.0KiB, parameter 53, shape |bf16[1024]| at ShapeIndex {}:
+allocation 101: size 2.0KiB, parameter 57, shape |bf16[1024]| at ShapeIndex {}:
+allocation 102: size 2.0KiB, parameter 61, shape |bf16[1024]| at ShapeIndex {}:
+allocation 103: size 2.0KiB, parameter 65, shape |bf16[1024]| at ShapeIndex {}:
+allocation 104: size 2.0KiB, parameter 69, shape |bf16[1024]| at ShapeIndex {}:
+allocation 105: size 2.0KiB, parameter 73, shape |bf16[1024]| at ShapeIndex {}:
+allocation 106: size 2.0KiB, parameter 77, shape |bf16[1024]| at ShapeIndex {}:
+allocation 107: size 2.0KiB, parameter 81, shape |bf16[1024]| at ShapeIndex {}:
+allocation 108: size 2.0KiB, parameter 85, shape |bf16[1024]| at ShapeIndex {}:
+allocation 109: size 2.0KiB, parameter 89, shape |bf16[1024]| at ShapeIndex {}:
+allocation 110: size 2.0KiB, parameter 93, shape |bf16[1024]| at ShapeIndex {}:
+allocation 111: size 2.0KiB, parameter 97, shape |bf16[1024]| at ShapeIndex {}:
+allocation 112: size 2.0KiB, parameter 101, shape |bf16[1024]| at ShapeIndex {}:
+allocation 113: size 2.0KiB, parameter 105, shape |bf16[1024]| at ShapeIndex {}:
+allocation 114: size 2.0KiB, parameter 109, shape |bf16[1024]| at ShapeIndex {}:
+allocation 115: size 2.0KiB, parameter 113, shape |bf16[1024]| at ShapeIndex {}:
+allocation 116: size 2.0KiB, parameter 3, shape |bf16[1024]| at ShapeIndex {}:
+allocation 117: size 256B, parameter 4, shape |s32[64]| at ShapeIndex {}:
+allocation 118: size 256B, parameter 0, shape |bf16[128]| at ShapeIndex {}:
+allocation 119: size 256B, parameter 114, shape |s32[64]| at ShapeIndex {}:
+allocation 120: size 32B, output shape is |(bf16[64,8,128], bf16[64,8,128], bf16[4233,16,8,128], bf16[4233,16,8,128])|, maybe-live-out:
+allocation 121: size 4B, thread-local:
+allocation 122: size 4B, thread-local:
+allocation 123: size 4B, thread-local:
+allocation 124: size 4B, parameter 1, shape |f32[]| at ShapeIndex {}:

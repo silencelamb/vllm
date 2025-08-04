@@ -1,0 +1,107 @@
+#indexing_map = #xla.indexing_map<"(d0) -> (0), domain: d0 in [0, 31]">
+#indexing_map1 = #xla.indexing_map<"(tid_0, tid_1) -> (18432), domain: tid_0 in [0, 31], tid_1 in [0, 0]">
+#indexing_map2 = #xla.indexing_map<"(tid_0, tid_1) -> (tid_0 * 19456 + 18432), domain: tid_0 in [0, 31], tid_1 in [0, 0]">
+#indexing_map3 = #xla.indexing_map<"(tid_0, tid_1) -> (0), domain: tid_0 in [0, 31], tid_1 in [0, 0]">
+#indexing_map4 = #xla.indexing_map<"(tid_0, tid_1) -> (tid_0 * 1024), domain: tid_0 in [0, 31], tid_1 in [0, 0]">
+module {
+  tt.func @fusion_242_impl(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg3: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg4: !tt.ptr<bf16> {tt.divisibility = 16 : i32}) {
+    %0 = tt.get_program_id x : i32
+    %1 = arith.extsi %0 : i32 to i64
+    %2 = arith.index_castui %1 : i64 to index
+    %3 = xla.apply_indexing #indexing_map(%2)
+    %c1_i64 = arith.constant 1 : i64
+    %c19456_i64 = arith.constant 19456 : i64
+    %4 = xla.apply_indexing #indexing_map1(%2, %3)
+    %c32_i64 = arith.constant 32 : i64
+    %5 = arith.index_castui %2 : index to i64
+    %6 = arith.subi %c32_i64, %5 : i64
+    %c19456_i64_0 = arith.constant 19456 : i64
+    %7 = arith.index_castui %4 : index to i64
+    %8 = arith.subi %c19456_i64_0, %7 : i64
+    %9 = xla.apply_indexing #indexing_map2(%2, %3)
+    %10 = arith.index_castui %9 : index to i64
+    %11 = tt.addptr %arg2, %10 : !tt.ptr<bf16>, i64
+    %c0_i32 = arith.constant 0 : i32
+    %12 = tt.make_tensor_ptr %11, [%6, %8], [%c19456_i64, %c1_i64], [%c0_i32, %c0_i32] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    %13 = tt.load %12 : !tt.ptr<tensor<1x1024xbf16>>
+    %14 = arith.extf %13 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %c1_i64_1 = arith.constant 1 : i64
+    %c1024_i64 = arith.constant 1024 : i64
+    %c0_i64 = arith.constant 0 : i64
+    %15 = xla.apply_indexing #indexing_map3(%2, %3)
+    %16 = xla.apply_indexing #indexing_map3(%2, %3)
+    %c32_i64_2 = arith.constant 32 : i64
+    %17 = arith.index_castui %2 : index to i64
+    %18 = arith.subi %c32_i64_2, %17 : i64
+    %c1_i64_3 = arith.constant 1 : i64
+    %19 = arith.index_castui %15 : index to i64
+    %20 = arith.subi %c1_i64_3, %19 : i64
+    %c1024_i64_4 = arith.constant 1024 : i64
+    %21 = arith.index_castui %16 : index to i64
+    %22 = arith.subi %c1024_i64_4, %21 : i64
+    %23 = xla.apply_indexing #indexing_map4(%2, %3)
+    %24 = arith.index_castui %23 : index to i64
+    %25 = tt.addptr %arg1, %24 : !tt.ptr<bf16>, i64
+    %c0_i32_5 = arith.constant 0 : i32
+    %26 = tt.make_tensor_ptr %25, [%18, %20, %22], [%c1024_i64, %c0_i64, %c1_i64_1], [%c0_i32_5, %c0_i32_5, %c0_i32_5] {order = array<i32: 2, 1, 0>} : <tensor<1x1x1024xbf16>>
+    %27 = tt.load %26 : !tt.ptr<tensor<1x1x1024xbf16>>
+    %28 = tt.trans %27 {order = array<i32: 1, 0, 2>} : tensor<1x1x1024xbf16> -> tensor<1x1x1024xbf16>
+    %29 = tt.reshape %28 : tensor<1x1x1024xbf16> -> tensor<1x1024xbf16>
+    %30 = arith.extf %29 : tensor<1x1024xbf16> to tensor<1x1024xf32>
+    %31 = arith.addf %14, %30 : tensor<1x1024xf32>
+    %32 = arith.mulf %31, %31 : tensor<1x1024xf32>
+    %cst = arith.constant 0.000000e+00 : f32
+    %33 = "tt.reduce"(%32) <{axis = 1 : i32}> ({
+    ^bb0(%arg5: f32, %arg6: f32):
+      %69 = arith.addf %arg5, %arg6 : f32
+      tt.reduce.return %69 : f32
+    }) : (tensor<1x1024xf32>) -> tensor<1xf32>
+    %cst_6 = arith.constant 9.765625E-4 : f32
+    %34 = tt.splat %cst_6 : f32 -> tensor<1xf32>
+    %35 = arith.mulf %33, %34 : tensor<1xf32>
+    %36 = xla.apply_indexing #indexing_map3(%2, %3)
+    %37 = arith.index_castui %36 : index to i64
+    %38 = tt.addptr %arg0, %37 : !tt.ptr<f32>, i64
+    %c0_i32_7 = arith.constant 0 : i32
+    %39 = tt.make_tensor_ptr %38, [], [], [] {order = array<i32>} : <tensor<f32>>
+    %40 = tt.load %38 : !tt.ptr<f32>
+    %41 = tt.splat %40 : f32 -> tensor<1xf32>
+    %42 = arith.addf %35, %41 : tensor<1xf32>
+    %43 = tt.extern_elementwise %42 {libname = "libdevice", libpath = "/usr/local/cuda-12.6/nvvm/libdevice/libdevice.10.bc", pure = true, symbol = "__nv_rsqrtf"} : (tensor<1xf32>) -> tensor<1xf32>
+    %44 = tt.expand_dims %43 {axis = 1 : i32} : tensor<1xf32> -> tensor<1x1xf32>
+    %45 = tt.broadcast %44 : tensor<1x1xf32> -> tensor<1x1024xf32>
+    %46 = arith.mulf %31, %45 : tensor<1x1024xf32>
+    %c1_i64_8 = arith.constant 1 : i64
+    %47 = xla.apply_indexing #indexing_map3(%2, %3)
+    %c1024_i64_9 = arith.constant 1024 : i64
+    %48 = arith.index_castui %47 : index to i64
+    %49 = arith.subi %c1024_i64_9, %48 : i64
+    %50 = xla.apply_indexing #indexing_map3(%2, %3)
+    %51 = arith.index_castui %50 : index to i64
+    %52 = tt.addptr %arg3, %51 : !tt.ptr<bf16>, i64
+    %c0_i32_10 = arith.constant 0 : i32
+    %53 = tt.make_tensor_ptr %52, [%49], [%c1_i64_8], [%c0_i32_10] {order = array<i32: 0>} : <tensor<1024xbf16>>
+    %54 = tt.load %53 : !tt.ptr<tensor<1024xbf16>>
+    %55 = arith.extf %54 : tensor<1024xbf16> to tensor<1024xf32>
+    %56 = tt.expand_dims %55 {axis = 0 : i32} : tensor<1024xf32> -> tensor<1x1024xf32>
+    %57 = tt.broadcast %56 : tensor<1x1024xf32> -> tensor<1x1024xf32>
+    %58 = arith.mulf %46, %57 : tensor<1x1024xf32>
+    %59 = arith.truncf %58 : tensor<1x1024xf32> to tensor<1x1024xbf16>
+    %c1_i64_11 = arith.constant 1 : i64
+    %c1024_i64_12 = arith.constant 1024 : i64
+    %60 = xla.apply_indexing #indexing_map3(%2, %3)
+    %c32_i64_13 = arith.constant 32 : i64
+    %61 = arith.index_castui %2 : index to i64
+    %62 = arith.subi %c32_i64_13, %61 : i64
+    %c1024_i64_14 = arith.constant 1024 : i64
+    %63 = arith.index_castui %60 : index to i64
+    %64 = arith.subi %c1024_i64_14, %63 : i64
+    %65 = xla.apply_indexing #indexing_map4(%2, %3)
+    %66 = arith.index_castui %65 : index to i64
+    %67 = tt.addptr %arg4, %66 : !tt.ptr<bf16>, i64
+    %c0_i32_15 = arith.constant 0 : i32
+    %68 = tt.make_tensor_ptr %67, [%62, %64], [%c1024_i64_12, %c1_i64_11], [%c0_i32_15, %c0_i32_15] {order = array<i32: 1, 0>} : <tensor<1x1024xbf16>>
+    tt.store %68, %59 : !tt.ptr<tensor<1x1024xbf16>>
+    tt.return
+  }
+}

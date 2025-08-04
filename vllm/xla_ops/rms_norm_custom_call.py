@@ -5,6 +5,7 @@ import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
 from typing import Optional
+import vllm
 
 
 class XlaRmsNormOp:
@@ -30,7 +31,6 @@ class XlaRmsNormOp:
         
         # Import and call the C++ registration function
         try:
-            import vllm._C_xla  # This would be the compiled extension
             vllm._C_xla.register_rms_norm_xla_custom_call()
             cls._registered = True
             print(f"Registered XLA custom call: {cls.TARGET_NAME}")
@@ -113,7 +113,6 @@ def register_rms_norm_lowering():
     """Register XLA lowering to replace vLLM's rms_norm with custom call."""
     
     from torch_xla.core import xla_builder
-    import torch.ops._C
     
     @xla_builder.register_lowering(torch.ops._C.rms_norm)
     def rms_norm_lowering(ctx, out, input, weight, epsilon):
