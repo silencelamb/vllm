@@ -322,7 +322,7 @@ def test_xla_gpu_compilation_simple():
             data_parallel_size=1,
             gpu_memory_utilization=0.15,
             compilation_config= {
-                "custom_ops": ["none"],  # Disable custom ops for simplicity
+                # Allow Flash Attention custom ops to work
                 "use_torch_compile": True,
                 "backend": "openxla",
                 "torch_compile_options": {

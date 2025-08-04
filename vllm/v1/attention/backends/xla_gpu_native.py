@@ -21,17 +21,106 @@ logger = init_logger(__name__)
 # Try to import flash attention functions
 try:
     from vllm import _custom_ops as ops
-    reshape_and_cache_flash = ops.reshape_and_cache_flash
-    from vllm.vllm_flash_attn import (flash_attn_varlen_func,
+    from vllm.utils import direct_register_custom_op
+    from vllm.platforms import current_platform
+    
+    # Import the original Flash Attention functions
+    _reshape_and_cache_flash_orig = ops.reshape_and_cache_flash
+    from vllm.vllm_flash_attn import (flash_attn_varlen_func as _flash_attn_varlen_func_orig,
                                       get_scheduler_metadata)
+    
+    # Keep the original functions accessible
+    reshape_and_cache_flash = _reshape_and_cache_flash_orig
+    flash_attn_varlen_func = _flash_attn_varlen_func_orig
+    
     FLASH_ATTN_AVAILABLE = True
     logger.info("Flash Attention available, using optimized implementation")
+    
+    # Now register custom ops for XLA GPU to handle fake tensors properly
+    # These wrap the Flash Attention functions with fake implementations for torch.compile
+    
+    def xla_reshape_and_cache_flash_wrapper(key, value, key_cache, value_cache, 
+                                           slot_mapping, kv_cache_dtype, k_scale, v_scale):
+        """Wrapper that calls the original reshape_and_cache_flash"""
+        _reshape_and_cache_flash_orig(key, value, key_cache, value_cache,
+                                     slot_mapping, kv_cache_dtype, k_scale, v_scale)
+    
+    def xla_reshape_and_cache_flash_fake(key, value, key_cache, value_cache, 
+                                        slot_mapping, kv_cache_dtype, k_scale, v_scale):
+        """Fake implementation for torch.compile - mutates cache tensors in place"""
+        # No return value, this is an in-place operation
+        pass
+    
+    def xla_flash_attn_wrapper(**kwargs):
+        """Wrapper that calls the original flash_attn_varlen_func"""
+        # Extract the arguments we need
+        q = kwargs.get('q')
+        k = kwargs.get('k')
+        v = kwargs.get('v')
+        out = kwargs.get('out')
+        cu_seqlens_q = kwargs.get('cu_seqlens_q')
+        max_seqlen_q = kwargs.get('max_seqlen_q')
+        seqused_k = kwargs.get('seqused_k')
+        max_seqlen_k = kwargs.get('max_seqlen_k')
+        softmax_scale = kwargs.get('softmax_scale')
+        causal = kwargs.get('causal', True)
+        block_table = kwargs.get('block_table', None)
+        scheduler_metadata = kwargs.get('scheduler_metadata', None)
+        
+        # Call the original function
+        return _flash_attn_varlen_func_orig(
+            q=q, k=k, v=v, out=out,
+            cu_seqlens_q=cu_seqlens_q,
+            max_seqlen_q=max_seqlen_q,
+            seqused_k=seqused_k,
+            max_seqlen_k=max_seqlen_k,
+            softmax_scale=softmax_scale,
+            causal=causal,
+            block_table=block_table,
+            scheduler_metadata=scheduler_metadata,
+        )
+    
+    def xla_flash_attn_fake(**kwargs):
+        """Fake implementation for torch.compile"""
+        out = kwargs.get('out')
+        # Return (output, lse) tuple - lse is None for fake implementation
+        return out, None
+    
+    # Register the custom ops for XLA GPU
+    # XLA GPU platform uses "XLA" as dispatch key
+    direct_register_custom_op(
+        op_name="xla_reshape_and_cache_flash",
+        op_func=xla_reshape_and_cache_flash_wrapper,
+        mutates_args=["key_cache", "value_cache"],
+        fake_impl=xla_reshape_and_cache_flash_fake,
+        dispatch_key="XLA",  # XLA GPU platform dispatch key
+    )
+    
+    direct_register_custom_op(
+        op_name="xla_flash_attn_varlen_func",
+        op_func=xla_flash_attn_wrapper,
+        mutates_args=["out"],
+        fake_impl=xla_flash_attn_fake,
+        dispatch_key="XLA",  # XLA GPU platform dispatch key
+    )
+    
 except ImportError:
     FLASH_ATTN_AVAILABLE = False
     logger.warning("Flash Attention not available, using fallback implementation")
-
-# Global variable to track registration
-_CUSTOM_OP_REGISTERED = False
+    
+    # Define fallback functions when Flash Attention is not available
+    def reshape_and_cache_flash(key, value, key_cache, value_cache, 
+                               slot_mapping, kv_cache_dtype, k_scale, v_scale):
+        # Use pure PyTorch implementation defined later in the file
+        # Note: This is a forward reference to _pytorch_kv_cache_update
+        # which is defined at line 502
+        global _pytorch_kv_cache_update
+        _pytorch_kv_cache_update(key, value, key_cache, value_cache,
+                                slot_mapping, kv_cache_dtype, k_scale, v_scale)
+    
+    def flash_attn_varlen_func(**kwargs):
+        # This should not be called when FLASH_ATTN_AVAILABLE is False
+        raise RuntimeError("Flash Attention is not available")
 
 # Global variable to track registration
 _CUSTOM_OP_REGISTERED = False
@@ -329,37 +418,18 @@ def xla_gpu_kv_cache_update(
         k_scale: Optional key scale factor
         v_scale: Optional value scale factor
     """
-    # Check if we're in torch.compile mode
-    import torch._dynamo as dynamo
-    if dynamo.is_compiling():
-        # During compilation, use torch.compiler.disable to escape fake tensor mode
-        @torch.compiler.disable
-        def run_kv_cache_update():
-            if FLASH_ATTN_AVAILABLE:
-                reshape_and_cache_flash(
-                    key, value, key_cache, value_cache,
-                    slot_mapping, kv_cache_dtype, k_scale, v_scale
-                )
-            else:
-                _pytorch_kv_cache_update(
-                    key, value, key_cache, value_cache,
-                    slot_mapping, kv_cache_dtype, k_scale, v_scale
-                )
-        run_kv_cache_update()
+    if FLASH_ATTN_AVAILABLE:
+        # Use our registered custom op that handles fake tensors properly
+        torch.ops.vllm.xla_reshape_and_cache_flash(
+            key, value, key_cache, value_cache,
+            slot_mapping, kv_cache_dtype, k_scale, v_scale
+        )
     else:
-        # Normal execution path
-        if FLASH_ATTN_AVAILABLE:
-            # Fallback to vLLM's reshape_and_cache_flash
-            reshape_and_cache_flash(
-                key, value, key_cache, value_cache,
-                slot_mapping, kv_cache_dtype, k_scale, v_scale
-            )
-        else:
-            # Pure PyTorch fallback
-            _pytorch_kv_cache_update(
-                key, value, key_cache, value_cache,
-                slot_mapping, kv_cache_dtype, k_scale, v_scale
-            )
+        # Pure PyTorch fallback
+        _pytorch_kv_cache_update(
+            key, value, key_cache, value_cache,
+            slot_mapping, kv_cache_dtype, k_scale, v_scale
+        )
 
 
 def xla_gpu_paged_attention_final(
@@ -394,61 +464,16 @@ def xla_gpu_paged_attention_final(
     # Get the actual number of tokens to process
     num_actual_tokens = attn_metadata.num_actual_tokens
     
-    # Check if we're in torch.compile mode
-    import torch._dynamo as dynamo
-    if dynamo.is_compiling():
-        # During compilation with torch.compile, we need to use a version that works with fake tensors
-        # Use torch.compile's built-in escape hatch to run the actual kernel
-        @torch.compiler.disable
-        def run_flash_attention():
-            if FLASH_ATTN_AVAILABLE and num_actual_tokens > 0:
-                try:
-                    seq_lens_to_use = attn_metadata.seq_lens_tensor if attn_metadata.seq_lens_tensor is not None else attn_metadata.seq_lens
-                    block_table_to_use = attn_metadata.block_tables if attn_metadata.block_tables is not None else attn_metadata.block_table
-                    
-                    flash_attn_varlen_func(
-                        q=query[:num_actual_tokens],
-                        k=key_cache,
-                        v=value_cache,
-                        out=output[:num_actual_tokens],
-                        cu_seqlens_q=attn_metadata.query_start_loc,
-                        max_seqlen_q=attn_metadata.max_query_len,
-                        seqused_k=seq_lens_to_use,
-                        max_seqlen_k=attn_metadata.max_seq_len,
-                        softmax_scale=softmax_scale,
-                        causal=True,
-                        block_table=block_table_to_use,
-                        scheduler_metadata=attn_metadata.scheduler_metadata,
-                    )
-                    return output
-                except Exception as e:
-                    logger.debug(f"Flash attention failed during compilation, using fallback: {e}")
-                    # Fallback
-                    output[:num_actual_tokens] = query[:num_actual_tokens] * softmax_scale
-                    if key_cache.numel() > 0:
-                        cache_factor = key_cache.view(-1)[0] * 1e-10
-                        output[:num_actual_tokens] = output[:num_actual_tokens] + cache_factor
-                    return output
-            else:
-                # Fallback
-                output[:num_actual_tokens] = query[:num_actual_tokens] * softmax_scale
-                if key_cache.numel() > 0:
-                    cache_factor = key_cache.view(-1)[0] * 1e-10
-                    output[:num_actual_tokens] = output[:num_actual_tokens] + cache_factor
-                return output
-        
-        return run_flash_attention()
-    
-    # Normal execution path (not during compilation)
     if FLASH_ATTN_AVAILABLE and num_actual_tokens > 0:
-        # Use Flash Attention
+        # Use Flash Attention via our registered custom op
         try:
             # Use the correct field names from XlaGpuPagedMetadata
             seq_lens_to_use = attn_metadata.seq_lens_tensor if attn_metadata.seq_lens_tensor is not None else attn_metadata.seq_lens
             block_table_to_use = attn_metadata.block_tables if attn_metadata.block_tables is not None else attn_metadata.block_table
             
-            # Call flash_attn_varlen_func
-            flash_attn_varlen_func(
+            # Call our registered custom op which handles fake tensors properly
+            # Flash Attention returns (output, lse) tuple, but output is modified in-place
+            _, _ = torch.ops.vllm.xla_flash_attn_varlen_func(
                 q=query[:num_actual_tokens],
                 k=key_cache,
                 v=value_cache,
@@ -465,8 +490,10 @@ def xla_gpu_paged_attention_final(
             return output
         except Exception as e:
             logger.debug(f"Flash attention failed, falling back: {e}")
+            # Fall through to fallback implementation
     
     # Fallback to simple scaled attention for testing
+    # This is a simple implementation that can be compiled by XLA
     output[:num_actual_tokens] = query[:num_actual_tokens] * softmax_scale
     
     # Add small dependency on cache to prevent optimization
