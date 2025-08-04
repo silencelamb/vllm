@@ -13,7 +13,15 @@ if [ ! -d "$CUDA_HOME" ]; then
     exit 1
 fi
 
-# Compile the CUDA file
+# Use the pure CUDA version (no PyTorch dependencies)
+CUDA_FILE="csrc/xla_rms_norm_pure.cu"
+
+if [ ! -f "$CUDA_FILE" ]; then
+    echo "Error: $CUDA_FILE not found"
+    exit 1
+fi
+
+# Compile the CUDA file (pure CUDA, no PyTorch headers needed)
 nvcc -O3 -shared -fPIC \
     -gencode arch=compute_70,code=sm_70 \
     -gencode arch=compute_75,code=sm_75 \
@@ -23,7 +31,7 @@ nvcc -O3 -shared -fPIC \
     -gencode arch=compute_90,code=sm_90 \
     -Xcompiler -fPIC \
     -o rms_norm_xla.so \
-    csrc/xla_rms_norm_simple.cu \
+    $CUDA_FILE \
     -I$CUDA_HOME/include \
     -L$CUDA_HOME/lib64 \
     -lcudart
