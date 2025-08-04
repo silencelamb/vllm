@@ -328,7 +328,7 @@ def test_xla_gpu_compilation_simple():
                 "torch_compile_options": {
                     "backend": "openxla",
                     "dynamic": True,  # Enable dynamic shapes
-                    "fullgraph": False,  # Allow graph breaks for dynamic shapes
+                    "fullgraph": True,  # Allow graph breaks for dynamic shapes
                 }
             },
         )
