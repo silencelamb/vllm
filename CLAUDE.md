@@ -34,18 +34,8 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
 
 - @vllm/v1/worker/xla_gpu_worker.py: 实现了XLA GPU的Worker类，XlaGpuWorker 用来接收请求并对XlaGpuModelRunner管理和调度执行
 - @vllm/v1/worker/xla_gpu_model_runner.py: 实现了XLA GPU的XlaGpuModelRunner, 用来执行模型，缓存XLA编译等
-- @vllm/v1/attention/backends/xla_gpu_native.py: 实现了XLA GPU的注意力机制，支持Pagedattention，XLA编译友好，目前核心报错是关于动态形状的编译问题，如果解决了这个问题，应该就可以正常运行了
-- @vllm/platforms/xla_gpu.py: 实现了XLA GPU KV缓存管理  
-- @tests/xla_gpu/test_compilation.py: 测试用例，测试XLA GPU编译和执行
-- @tests/xla_gpu/test_debug_custom_call.py: 是一个通过torch xla提供的custom call注册custom op的测试用例和示例，主要是为了测试XLA GPU的custom op注册和执行的例子，目前是一个简单的加法算子，后续可以扩展为更复杂的算子。
-- @tests/xla_gpu/test_torch_compile_custom_call.py: 是1个示例，torch xla注册的custom op可以很好的和torch.compiple(backend='openxla')兼容，目前是一个简单的加法算子，后续可以扩展为更复杂的算子。
-
-## 后续工作
-
-后续工作包括：
-
-1. 利用新增custom os的手段，实现1个XLA GPU的PagedAttention算子
-   - 这个算子的功能就是调用flash-attention
+- @vllm/v1/attention/backends/xla_gpu_native.py: 实现了个XLA GPU的PagedAttention算子
+  - 这个算子的功能就是调用flash-attention
            flash_attn_varlen_func(
             q=query,
             k=key_cache, v=value_cache,      # 使用缓存
@@ -69,8 +59,20 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
                 layer._k_scale,
                 layer._v_scale,
             )
-   - 因此@vllm/v1/worker/xla_gpu_model_runner.py需要完全跟这个算子对接，主要是_prepare_inputs对接好这个算子。可以参考@vllm/v1/worker/gpu_model_runner.py的_prepare_inputs方法。
-   - 另外，需要确保在XlaGpuWorker中正确处理请求，以便与新的PagedAttention算子兼容。
+- @vllm/platforms/xla_gpu.py: 实现新增XLA GPU平台
+- @tests/xla_gpu/test_compilation.py: 测试用例，测试XLA GPU编译和执行
+- @tests/xla_gpu/test_debug_custom_call.py: 是一个通过torch xla提供的custom call注册custom op的测试用例和示例，主要是为了测试XLA GPU的custom op注册和执行的例子，目前是一个简单的加法算子，后续可以扩展为更复杂的算子。
+- @playground/custom_call/naive_ctypes/下有2个示例，torch xla注册的custom op可以很好的和torch.compiple(backend='openxla')兼容，目前是一个简单的加法算子和1个rms_norm算子，后续可以扩展为更复杂的算子。
+
+## 后续工作
+
+后续工作包括：
+
+1. 利用新增custom os的手段，新增flash_attn_varlen_func 和 reshape_and_cache_flash的custom call算子。可以先从单个的算子封装和测试开始，确保它们可以在XLA GPU上正确执行。
+   - 需要在`@vllm/v1/attention/backends/xla_gpu_native.py`中实现这两个算子的custom call注册。
+   - 可以参考`@playground/custom_call/naive_ctypes/rms_norm/test_rms_norm_minimal.py`中的实现。
+   - 需要在`@vllm/v1/worker/xla_gpu_model_runner.py`中实现对接逻辑，确保算子能够正确处理输入和输出。
+2. @vllm/v1/worker/xla_gpu_model_runner.py需要完全跟这个算子对接，主要是_prepare_inputs对接好这个算子。可以参考@vllm/v1/worker/gpu_model_runner.py的_prepare_inputs方法。另外，需要确保在XlaGpuWorker中正确处理请求，以便与PagedAttention算子兼容。
 
 ## 规范说明
 
