@@ -95,16 +95,15 @@ def step3_test():
     has_v_scale = v_scale is not None
     
     descriptor = struct.pack(
-        'qqqqqibbo',
+        'qqqqqibb',
         num_tokens,
         num_kv_heads,
         head_size,
         num_blocks,
         block_size,
         kv_cache_dtype,
-        has_k_scale,
-        has_v_scale,
-        0  # padding for alignment
+        1 if has_k_scale else 0,  # Convert bool to int
+        1 if has_v_scale else 0   # Convert bool to int
     )
     
     try:
@@ -217,16 +216,15 @@ def test_with_scaling():
     
     # Create descriptor
     descriptor = struct.pack(
-        'qqqqqibbo',
+        'qqqqqibb',
         num_tokens,
         num_kv_heads,
         head_size,
         num_blocks,
         block_size,
         0,  # float32
-        True,  # has_k_scale
-        True,  # has_v_scale
-        0  # padding
+        1,  # has_k_scale = True
+        1   # has_v_scale = True
     )
     
     try:

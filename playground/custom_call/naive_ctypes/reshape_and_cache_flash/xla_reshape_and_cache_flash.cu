@@ -14,8 +14,8 @@ struct ReshapeAndCacheDescriptor {
   int64_t num_blocks;
   int64_t block_size;
   int32_t kv_cache_dtype;  // 0: auto/float32, 1: float16, 2: bfloat16
-  bool has_k_scale;
-  bool has_v_scale;
+  uint8_t has_k_scale;
+  uint8_t has_v_scale;
 };
 
 extern "C" {

@@ -66,16 +66,15 @@ def xla_reshape_and_cache_flash_impl(
     
     # Create descriptor
     descriptor = struct.pack(
-        'qqqqqibbo',
+        'qqqqqibb',
         num_tokens,
         num_kv_heads,
         head_size,
         num_blocks,
         block_size,
         kv_cache_dtype_int,
-        has_k_scale,
-        has_v_scale,
-        0  # padding
+        1 if has_k_scale else 0,  # Convert bool to int
+        1 if has_v_scale else 0   # Convert bool to int
     )
     
     # Prepare buffers
@@ -114,6 +113,8 @@ def xla_reshape_and_cache_flash_fake(
 ) -> None:
     """Fake implementation for torch.compile."""
     # This is an in-place operation that modifies the cache tensors
+    # For the fake implementation, we need to indicate that the caches are modified
+    # without actually doing the computation
     pass
 
 
