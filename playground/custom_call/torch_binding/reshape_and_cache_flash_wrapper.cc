@@ -2,6 +2,8 @@
 #include <torch/extension.h>
 #include <cuda_runtime.h>
 #include <cstring>
+#include <c10/cuda/CUDAStream.h>
+#include <c10/cuda/CUDAGuard.h>
 
 // Forward declaration of the reshape_and_cache_flash function from cache_kernels.cu
 extern void reshape_and_cache_flash(
@@ -97,7 +99,8 @@ extern "C" void reshape_and_cache_flash_xla_custom_call(
     
     // Set CUDA stream
     cudaStream_t stream = reinterpret_cast<cudaStream_t>(stream_ptr);
-    at::cuda::setCurrentCUDAStream(stream);
+    // Use device guard to set the stream
+    c10::cuda::CUDAStreamGuard stream_guard(c10::cuda::getStreamFromExternal(stream, key.device().index()));
     
     // Call the actual function
     reshape_and_cache_flash(
