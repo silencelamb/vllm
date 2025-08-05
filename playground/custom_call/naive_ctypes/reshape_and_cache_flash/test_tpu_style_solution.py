@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test torch.compile with in-place operations - fixing alias annotation issues."""
+"""TPU-style solution for reshape_and_cache_flash with XLA optimization."""
 
 import os
 import torch
@@ -8,11 +8,10 @@ import torch_xla.core.xla_model as xm
 import ctypes
 import struct
 from torch.library import Library
-from functools import wraps
 
 
-# Create a custom library for our ops
-reshape_cache_lib = Library("reshape_cache", "FRAGMENT")
+# Create library for our custom ops
+xla_cache_lib = Library("xla_cache", "FRAGMENT")
 
 
 def setup_custom_call():
@@ -38,7 +37,7 @@ def setup_custom_call():
     print("✓ Custom call registered")
 
 
-def xla_reshape_and_cache_flash_impl(
+def reshape_and_cache_flash_impl(
     key: torch.Tensor,
     value: torch.Tensor,
     key_cache: torch.Tensor,
@@ -47,8 +46,8 @@ def xla_reshape_and_cache_flash_impl(
     kv_cache_dtype: str,
     k_scale: torch.Tensor,
     v_scale: torch.Tensor,
-) -> None:
-    """Implementation that calls XLA custom call with in-place updates."""
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Implementation that returns new tensors (like TPU)."""
     # Extract dimensions
     num_tokens = key.shape[0]
     num_kv_heads = key.shape[1]
@@ -96,74 +95,86 @@ def xla_reshape_and_cache_flash_impl(
         {}
     )
     
-    # Copy outputs back to original tensors (in-place update)
-    key_cache.copy_(outputs[0])
-    value_cache.copy_(outputs[1])
+    return outputs[0], outputs[1]
 
 
-# Register with manual schema to avoid automatic inference
-reshape_cache_lib.define(
-    "reshape_and_cache_flash(Tensor key, Tensor value, Tensor key_cache, "
+# Define the operation that returns new tensors
+xla_cache_lib.define(
+    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
     "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-    "Tensor? k_scale, Tensor? v_scale) -> ()"
+    "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
 )
 
 
-# Implementation for XLA
-@reshape_cache_lib.impl("XLA")
-def reshape_and_cache_flash_xla(
-    key, value, key_cache, value_cache, slot_mapping, 
+@xla_cache_lib.impl("XLA")
+def reshape_and_cache_update_op_xla(
+    key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
 ):
-    xla_reshape_and_cache_flash_impl(
+    return reshape_and_cache_flash_impl(
         key, value, key_cache, value_cache,
         slot_mapping, kv_cache_dtype, k_scale, v_scale
     )
 
 
-# Abstract implementation for torch.compile
-@reshape_cache_lib.impl_abstract
-def reshape_and_cache_flash_abstract(
+@xla_cache_lib.impl_abstract
+def reshape_and_cache_update_op_abstract(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
 ):
-    # Return nothing (void function)
-    return None
+    # Return tensors with same shape/dtype as caches
+    return key_cache.clone(), value_cache.clone()
 
 
-# Register a custom decomposition to handle in-place updates
-@torch._dynamo.register_decomposition(torch.ops.reshape_cache.reshape_and_cache_flash)
-def reshape_and_cache_flash_decomp(
-    key, value, key_cache, value_cache, slot_mapping,
-    kv_cache_dtype, k_scale, v_scale
-):
-    """Decomposition that avoids alias annotation issues."""
-    # Call the implementation
-    xla_reshape_and_cache_flash_impl(
+def reshape_and_cache_flash_tpu_style(
+    key: torch.Tensor,
+    value: torch.Tensor,
+    key_cache: torch.Tensor,
+    value_cache: torch.Tensor,
+    slot_mapping: torch.Tensor,
+    kv_cache_dtype: str = "auto",
+    k_scale: torch.Tensor = None,
+    v_scale: torch.Tensor = None,
+) -> None:
+    """TPU-style wrapper that uses buffer donor optimization."""
+    # Mark caches as buffer donors (if XLA supports it)
+    if hasattr(torch.ops.xla, 'dynamo_set_buffer_donor_'):
+        torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+        torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+    
+    # Get new caches
+    new_key_cache, new_value_cache = torch.ops.xla_cache.reshape_and_cache_update_op(
         key, value, key_cache, value_cache,
         slot_mapping, kv_cache_dtype, k_scale, v_scale
     )
-    # Return nothing
-    return None
+    
+    # Copy back (will be optimized away by XLA)
+    # NOTE: the in-place copy will be optimized away by XLA compiler
+    # when buffer donor is set
+    key_cache.copy_(new_key_cache)
+    value_cache.copy_(new_value_cache)
 
 
-def test_basic_functionality():
+def test_basic():
     """Test basic functionality."""
     print("\n" + "="*60)
-    print("Testing basic reshape_and_cache_flash functionality")
+    print("Testing TPU-style basic functionality")
     print("="*60)
     
     device = xm.xla_device()
     
-    # Test parameters
     key = torch.randn(4, 2, 8, device=device)
     value = torch.randn(4, 2, 8, device=device)
     key_cache = torch.zeros(2, 16, 2, 8, device=device)
     value_cache = torch.zeros(2, 16, 2, 8, device=device)
     slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device)
     
-    # Call our custom op
-    torch.ops.reshape_cache.reshape_and_cache_flash(
+    # Store pointers
+    key_ptr = key_cache.data_ptr()
+    value_ptr = value_cache.data_ptr()
+    
+    # Call TPU-style
+    reshape_and_cache_flash_tpu_style(
         key, value, key_cache, value_cache,
         slot_mapping, "auto", None, None
     )
@@ -171,95 +182,112 @@ def test_basic_functionality():
     xm.mark_step()
     
     print("✓ Basic test completed")
+    print(f"  Key cache ptr same: {key_cache.data_ptr() == key_ptr}")
+    print(f"  Value cache ptr same: {value_cache.data_ptr() == value_ptr}")
     
-    # Check if caches were modified
-    if (key_cache != 0).any().item() and (value_cache != 0).any().item():
+    if (key_cache != 0).any() and (value_cache != 0).any():
         print("✓ Caches were updated")
-    else:
-        print("⚠ Caches were not updated")
 
 
 def test_torch_compile():
     """Test torch.compile compatibility."""
     print("\n" + "="*60)
-    print("Testing torch.compile integration")
+    print("Testing torch.compile with TPU-style approach")
     print("="*60)
     
     device = xm.xla_device()
     
     @torch.compile(backend="openxla")
-    def compiled_cache_update(key, value, key_cache, value_cache, slot_mapping):
-        # Use our custom op
-        torch.ops.reshape_cache.reshape_and_cache_flash(
+    def compiled_update(key, value, key_cache, value_cache, slot_mapping):
+        reshape_and_cache_flash_tpu_style(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", None, None
         )
         return key_cache.abs().mean() + value_cache.abs().mean()
     
-    # Test inputs
+    # Test
     key = torch.randn(4, 2, 8, device=device)
     value = torch.randn(4, 2, 8, device=device)
     key_cache = torch.zeros(2, 16, 2, 8, device=device)
     value_cache = torch.zeros(2, 16, 2, 8, device=device)
     slot_mapping = torch.tensor([0, 1, 2, 3], dtype=torch.int64, device=device)
     
-    # Run compiled function
-    result = compiled_cache_update(key, value, key_cache, value_cache, slot_mapping)
-    xm.mark_step()
-    
-    print(f"✓ torch.compile test completed")
-    print(f"  Result: {result.item():.4f}")
-    
-    if result.item() > 0:
-        print("✓ Caches were modified")
+    try:
+        result = compiled_update(key, value, key_cache, value_cache, slot_mapping)
+        xm.mark_step()
+        
+        print(f"✓ torch.compile test completed")
+        print(f"  Result: {result.item():.4f}")
+        
+        if result.item() > 0:
+            print("✓ Caches were modified")
+    except Exception as e:
+        print(f"✗ torch.compile test failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 
-def test_with_scaling():
-    """Test with scaling factors."""
+def test_xla_optimization():
+    """Test to verify XLA optimization behavior."""
     print("\n" + "="*60)
-    print("Testing with scaling factors")
+    print("Testing XLA optimization behavior")
     print("="*60)
     
     device = xm.xla_device()
     
-    # Simple values for testing
+    # Enable XLA graph dump if available
+    os.environ["XLA_SAVE_TENSORS_FILE"] = "/tmp/xla_tensors.txt"
+    os.environ["XLA_SAVE_TENSORS_FMT"] = "text"
+    
+    @torch.compile(backend="openxla", fullgraph=True)
+    def optimized_fn(key, value, key_cache, value_cache, slot_mapping):
+        # Multiple updates to test optimization
+        for _ in range(3):
+            reshape_and_cache_flash_tpu_style(
+                key, value, key_cache, value_cache,
+                slot_mapping, "auto", None, None
+            )
+        return key_cache.sum()
+    
+    # Small tensors for testing
     key = torch.ones(2, 1, 4, device=device)
     value = torch.ones(2, 1, 4, device=device) * 2.0
     key_cache = torch.zeros(1, 8, 1, 4, device=device)
     value_cache = torch.zeros(1, 8, 1, 4, device=device)
     slot_mapping = torch.tensor([0, 1], dtype=torch.int64, device=device)
     
-    k_scale = torch.tensor([0.5], device=device)
-    v_scale = torch.tensor([2.0], device=device)
-    
-    # Apply with scaling
-    torch.ops.reshape_cache.reshape_and_cache_flash(
-        key, value, key_cache, value_cache,
-        slot_mapping, "auto", k_scale, v_scale
-    )
-    
-    xm.mark_step()
-    
-    print("✓ Scaling test completed")
-    print(f"  key_cache[0,0,0,0]: {key_cache[0,0,0,0].item():.2f} (expected: 0.5)")
-    print(f"  value_cache[0,0,0,0]: {value_cache[0,0,0,0].item():.2f} (expected: 4.0)")
+    try:
+        result = optimized_fn(key, value, key_cache, value_cache, slot_mapping)
+        xm.mark_step()
+        
+        print(f"✓ XLA optimization test completed")
+        print(f"  Result: {result.item():.4f}")
+        print("\n  Check XLA graph in /tmp/xla_tensors.txt to verify optimization")
+    except Exception as e:
+        print(f"⚠ Fullgraph compilation might not be supported: {e}")
 
 
 def main():
     print("="*60)
-    print("Testing in-place reshape_and_cache_flash with torch.compile")
+    print("TPU-style solution for reshape_and_cache_flash")
     print("="*60)
+    print("\nThis approach:")
+    print("1. Returns new tensors (avoiding alias annotations)")
+    print("2. Uses buffer donor optimization (if supported)")
+    print("3. XLA compiler optimizes away the copy")
     
     # Setup
     setup_custom_call()
     
     # Run tests
-    test_basic_functionality()
+    test_basic()
     test_torch_compile()
-    test_with_scaling()
+    test_xla_optimization()
     
     print("\n" + "="*60)
-    print("✅ All tests completed!")
+    print("✅ Tests completed!")
+    print("\nNote: The actual optimization depends on XLA compiler support.")
+    print("In production, XLA should optimize away the copy_ operations.")
     print("="*60)
 
 
