@@ -45,7 +45,7 @@ def xla_reshape_and_cache_flash_impl(
     kv_cache_dtype: str,
     k_scale: torch.Tensor,
     v_scale: torch.Tensor,
-) -> None:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Implementation that calls XLA custom call."""
     device = key.device
     
@@ -96,9 +96,9 @@ def xla_reshape_and_cache_flash_impl(
         {}  # backend_config
     )
     
-    # Update caches in-place
-    key_cache.copy_(outputs[0])
-    value_cache.copy_(outputs[1])
+    # Return the modified caches (avoiding alias annotations)
+    # We return clones to avoid sharing storage with inputs
+    return outputs[0].clone(), outputs[1].clone()
 
 
 def xla_reshape_and_cache_flash_fake(
@@ -110,12 +110,10 @@ def xla_reshape_and_cache_flash_fake(
     kv_cache_dtype: str,
     k_scale: torch.Tensor,
     v_scale: torch.Tensor,
-) -> None:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Fake implementation for torch.compile."""
-    # This is an in-place operation that modifies the cache tensors
-    # For the fake implementation, we need to indicate that the caches are modified
-    # without actually doing the computation
-    pass
+    # Return clones to match the real implementation signature
+    return key_cache.clone(), value_cache.clone()
 
 
 def test_basic_functionality():
@@ -140,8 +138,8 @@ def test_basic_functionality():
     value_cache = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=device)
     slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device)
     
-    # Call the custom op
-    torch.ops.vllm.xla_reshape_and_cache_flash(
+    # Call the custom op - it now returns the modified caches
+    key_cache_out, value_cache_out = torch.ops.vllm.xla_reshape_and_cache_flash(
         key, value, key_cache, value_cache,
         slot_mapping, "auto", None, None
     )
@@ -152,8 +150,8 @@ def test_basic_functionality():
     print("✓ Basic test completed successfully")
     
     # Check that some values were written
-    non_zero_key = (key_cache != 0).any().item()
-    non_zero_value = (value_cache != 0).any().item()
+    non_zero_key = (key_cache_out != 0).any().item()
+    non_zero_value = (value_cache_out != 0).any().item()
     
     if non_zero_key and non_zero_value:
         print("✓ Caches were updated")
@@ -183,11 +181,14 @@ def test_torch_compile():
             )
         
         def forward(self, key, value, slot_mapping):
-            # Use our custom op
-            torch.ops.vllm.xla_reshape_and_cache_flash(
+            # Use our custom op - it returns the modified caches
+            key_cache_out, value_cache_out = torch.ops.vllm.xla_reshape_and_cache_flash(
                 key, value, self.key_cache, self.value_cache,
                 slot_mapping, "auto", None, None
             )
+            # Update the parameters with the returned values
+            self.key_cache.data = key_cache_out
+            self.value_cache.data = value_cache_out
             # Return something that depends on the cache
             return self.key_cache.sum() + self.value_cache.sum()
     
@@ -222,10 +223,11 @@ def main():
     setup_custom_call()
     
     # Register the custom op with vLLM's system
+    # Note: We removed mutates_args since we now return cloned tensors
     direct_register_custom_op(
         op_name="xla_reshape_and_cache_flash",
         op_func=xla_reshape_and_cache_flash_impl,
-        mutates_args=["key_cache", "value_cache"],
+        mutates_args=[],  # Empty list since we return clones
         fake_impl=xla_reshape_and_cache_flash_fake,
         dispatch_key="XLA",
     )
