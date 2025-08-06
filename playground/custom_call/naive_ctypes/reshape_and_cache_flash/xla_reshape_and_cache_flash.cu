@@ -1,6 +1,5 @@
 // Pure CUDA implementation of reshape_and_cache_flash for XLA Custom Call
 // This implementation is based on vLLM's reshape_and_cache_flash operation
-// Supports float32, float16, and bfloat16 data types
 
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -22,9 +21,7 @@ struct ReshapeAndCacheDescriptor {
   uint8_t has_v_scale;
 };
 
-extern "C" {
-
-// Template kernel that matches vLLM's reshape_and_cache_flash_kernel
+// Template kernel must be outside extern "C"
 template <typename scalar_t, typename cache_t>
 __global__ void reshape_and_cache_flash_kernel(
     const scalar_t* __restrict__ key,    // [num_tokens, num_heads, head_size]
@@ -70,7 +67,8 @@ __global__ void reshape_and_cache_flash_kernel(
     scalar_t tgt_value = value[src_value_idx];
     
     // Apply scaling if provided (only for float32 path)
-    if constexpr (std::is_same<scalar_t, float>::value) {
+    // Note: We use runtime check instead of if constexpr for C++11 compatibility
+    if (sizeof(scalar_t) == sizeof(float)) {
       if (k_scale != nullptr) {
         tgt_key = tgt_key * k_scale[0];
       }
@@ -80,109 +78,12 @@ __global__ void reshape_and_cache_flash_kernel(
     }
     
     // Store to cache (with type conversion if needed)
-    if constexpr (std::is_same<scalar_t, cache_t>::value) {
-      // Same type, direct copy
-      key_cache[tgt_key_value_idx] = tgt_key;
-      value_cache[tgt_key_value_idx] = tgt_value;
-    } else {
-      // Type conversion needed
-      key_cache[tgt_key_value_idx] = cache_t(tgt_key);
-      value_cache[tgt_key_value_idx] = cache_t(tgt_value);
-    }
+    key_cache[tgt_key_value_idx] = cache_t(tgt_key);
+    value_cache[tgt_key_value_idx] = cache_t(tgt_value);
   }
 }
 
-// Helper function to launch kernels with correct types
-template <typename scalar_t>
-void launch_kernel(
-    const void* key,
-    const void* value,
-    void* key_cache,
-    void* value_cache,
-    const int64_t* slot_mapping,
-    const ReshapeAndCacheDescriptor& desc,
-    const float* k_scale,
-    const float* v_scale,
-    cudaStream_t stream) {
-    
-  // Calculate strides (matching vLLM's layout)
-  int64_t key_stride = desc.num_kv_heads * desc.head_size;
-  int64_t value_stride = desc.num_kv_heads * desc.head_size;
-  int64_t block_stride = desc.block_size * desc.num_kv_heads * desc.head_size;
-  int64_t page_stride = desc.num_kv_heads * desc.head_size;
-  int64_t head_stride = desc.head_size;
-  
-  // Launch kernel with 1D grid and 1D block (like vLLM)
-  dim3 grid(desc.num_tokens);
-  dim3 block(std::min((int64_t)512, desc.num_kv_heads * desc.head_size));
-  
-  // Dispatch based on cache type
-  if (desc.kv_cache_dtype == 0 || desc.kv_cache_dtype == 3) {
-    // Auto or float32 - same type as input
-    if constexpr (std::is_same<scalar_t, float>::value) {
-      reshape_and_cache_flash_kernel<float, float><<<grid, block, 0, stream>>>(
-          static_cast<const float*>(key),
-          static_cast<const float*>(value),
-          static_cast<float*>(key_cache),
-          static_cast<float*>(value_cache),
-          slot_mapping,
-          block_stride, page_stride, head_stride,
-          key_stride, value_stride,
-          desc.num_kv_heads, desc.head_size, desc.block_size,
-          k_scale, v_scale);
-    } else if constexpr (std::is_same<scalar_t, __half>::value) {
-      reshape_and_cache_flash_kernel<__half, __half><<<grid, block, 0, stream>>>(
-          static_cast<const __half*>(key),
-          static_cast<const __half*>(value),
-          static_cast<__half*>(key_cache),
-          static_cast<__half*>(value_cache),
-          slot_mapping,
-          block_stride, page_stride, head_stride,
-          key_stride, value_stride,
-          desc.num_kv_heads, desc.head_size, desc.block_size,
-          nullptr, nullptr);  // No scaling for fp16
-    } else if constexpr (std::is_same<scalar_t, __nv_bfloat16>::value) {
-      reshape_and_cache_flash_kernel<__nv_bfloat16, __nv_bfloat16><<<grid, block, 0, stream>>>(
-          static_cast<const __nv_bfloat16*>(key),
-          static_cast<const __nv_bfloat16*>(value),
-          static_cast<__nv_bfloat16*>(key_cache),
-          static_cast<__nv_bfloat16*>(value_cache),
-          slot_mapping,
-          block_stride, page_stride, head_stride,
-          key_stride, value_stride,
-          desc.num_kv_heads, desc.head_size, desc.block_size,
-          nullptr, nullptr);  // No scaling for bf16
-    }
-  } else if (desc.kv_cache_dtype == 1) {
-    // Convert to float16
-    if constexpr (std::is_same<scalar_t, float>::value) {
-      reshape_and_cache_flash_kernel<float, __half><<<grid, block, 0, stream>>>(
-          static_cast<const float*>(key),
-          static_cast<const float*>(value),
-          static_cast<__half*>(key_cache),
-          static_cast<__half*>(value_cache),
-          slot_mapping,
-          block_stride, page_stride, head_stride,
-          key_stride, value_stride,
-          desc.num_kv_heads, desc.head_size, desc.block_size,
-          k_scale, v_scale);
-    }
-  } else if (desc.kv_cache_dtype == 2) {
-    // Convert to bfloat16
-    if constexpr (std::is_same<scalar_t, float>::value) {
-      reshape_and_cache_flash_kernel<float, __nv_bfloat16><<<grid, block, 0, stream>>>(
-          static_cast<const float*>(key),
-          static_cast<const float*>(value),
-          static_cast<__nv_bfloat16*>(key_cache),
-          static_cast<__nv_bfloat16*>(value_cache),
-          slot_mapping,
-          block_stride, page_stride, head_stride,
-          key_stride, value_stride,
-          desc.num_kv_heads, desc.head_size, desc.block_size,
-          k_scale, v_scale);
-    }
-  }
-}
+extern "C" {
 
 // XLA Custom Call implementation
 void reshape_and_cache_flash_xla_custom_call(
@@ -214,38 +115,85 @@ void reshape_and_cache_flash_xla_custom_call(
     v_scale_buffer = static_cast<const float*>(buffers[buffer_idx]);
   }
   
-  // Dispatch based on input data type
-  switch (descriptor.input_dtype) {
-    case 0:  // float32
-      launch_kernel<float>(
-          key_buffer, value_buffer,
-          key_cache_buffer, value_cache_buffer,
+  // Calculate strides (matching vLLM's layout)
+  int64_t key_stride = descriptor.num_kv_heads * descriptor.head_size;
+  int64_t value_stride = descriptor.num_kv_heads * descriptor.head_size;
+  int64_t block_stride = descriptor.block_size * descriptor.num_kv_heads * descriptor.head_size;
+  int64_t page_stride = descriptor.num_kv_heads * descriptor.head_size;
+  int64_t head_stride = descriptor.head_size;
+  
+  // Launch kernel with 1D grid and 1D block (like vLLM)
+  dim3 grid(descriptor.num_tokens);
+  dim3 block(std::min((int64_t)512, descriptor.num_kv_heads * descriptor.head_size));
+  
+  // Dispatch based on input and cache data types
+  // For simplicity, we'll handle the most common cases
+  if (descriptor.input_dtype == 0) {  // float32 input
+    if (descriptor.kv_cache_dtype == 0 || descriptor.kv_cache_dtype == 3) {
+      // float32 -> float32
+      reshape_and_cache_flash_kernel<float, float><<<grid, block, 0, stream>>>(
+          static_cast<const float*>(key_buffer),
+          static_cast<const float*>(value_buffer),
+          static_cast<float*>(key_cache_buffer),
+          static_cast<float*>(value_cache_buffer),
           static_cast<const int64_t*>(slot_mapping_buffer),
-          descriptor,
-          k_scale_buffer, v_scale_buffer,
-          stream);
-      break;
-    case 1:  // float16
-      launch_kernel<__half>(
-          key_buffer, value_buffer,
-          key_cache_buffer, value_cache_buffer,
+          block_stride, page_stride, head_stride,
+          key_stride, value_stride,
+          descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
+          k_scale_buffer, v_scale_buffer);
+    } else if (descriptor.kv_cache_dtype == 1) {
+      // float32 -> float16
+      reshape_and_cache_flash_kernel<float, __half><<<grid, block, 0, stream>>>(
+          static_cast<const float*>(key_buffer),
+          static_cast<const float*>(value_buffer),
+          static_cast<__half*>(key_cache_buffer),
+          static_cast<__half*>(value_cache_buffer),
           static_cast<const int64_t*>(slot_mapping_buffer),
-          descriptor,
-          nullptr, nullptr,  // No scaling for fp16
-          stream);
-      break;
-    case 2:  // bfloat16
-      launch_kernel<__nv_bfloat16>(
-          key_buffer, value_buffer,
-          key_cache_buffer, value_cache_buffer,
+          block_stride, page_stride, head_stride,
+          key_stride, value_stride,
+          descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
+          k_scale_buffer, v_scale_buffer);
+    } else if (descriptor.kv_cache_dtype == 2) {
+      // float32 -> bfloat16
+      reshape_and_cache_flash_kernel<float, __nv_bfloat16><<<grid, block, 0, stream>>>(
+          static_cast<const float*>(key_buffer),
+          static_cast<const float*>(value_buffer),
+          static_cast<__nv_bfloat16*>(key_cache_buffer),
+          static_cast<__nv_bfloat16*>(value_cache_buffer),
           static_cast<const int64_t*>(slot_mapping_buffer),
-          descriptor,
-          nullptr, nullptr,  // No scaling for bf16
-          stream);
-      break;
-    default:
-      // Unsupported type, do nothing
-      break;
+          block_stride, page_stride, head_stride,
+          key_stride, value_stride,
+          descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
+          k_scale_buffer, v_scale_buffer);
+    }
+  } else if (descriptor.input_dtype == 1) {  // float16 input
+    if (descriptor.kv_cache_dtype == 0 || descriptor.kv_cache_dtype == 1) {
+      // float16 -> float16
+      reshape_and_cache_flash_kernel<__half, __half><<<grid, block, 0, stream>>>(
+          static_cast<const __half*>(key_buffer),
+          static_cast<const __half*>(value_buffer),
+          static_cast<__half*>(key_cache_buffer),
+          static_cast<__half*>(value_cache_buffer),
+          static_cast<const int64_t*>(slot_mapping_buffer),
+          block_stride, page_stride, head_stride,
+          key_stride, value_stride,
+          descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
+          nullptr, nullptr);  // No scaling for fp16
+    }
+  } else if (descriptor.input_dtype == 2) {  // bfloat16 input
+    if (descriptor.kv_cache_dtype == 0 || descriptor.kv_cache_dtype == 2) {
+      // bfloat16 -> bfloat16
+      reshape_and_cache_flash_kernel<__nv_bfloat16, __nv_bfloat16><<<grid, block, 0, stream>>>(
+          static_cast<const __nv_bfloat16*>(key_buffer),
+          static_cast<const __nv_bfloat16*>(value_buffer),
+          static_cast<__nv_bfloat16*>(key_cache_buffer),
+          static_cast<__nv_bfloat16*>(value_cache_buffer),
+          static_cast<const int64_t*>(slot_mapping_buffer),
+          block_stride, page_stride, head_stride,
+          key_stride, value_stride,
+          descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
+          nullptr, nullptr);  // No scaling for bf16
+    }
   }
 }
 
