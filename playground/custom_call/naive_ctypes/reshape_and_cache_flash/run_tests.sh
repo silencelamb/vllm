@@ -9,7 +9,7 @@ echo "======================================================================"
 export CUDA_VISIBLE_DEVICES=3
 export PJRT_DEVICE=CUDA
 export GPU_NUM_DEVICES=1
-export XLA_DYNAMO_DEBUG=1
+export XLA_DYNAMO_DEBUG=0
 
 # Compile the library first
 echo "Step 1: Compiling library..."

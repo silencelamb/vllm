@@ -130,6 +130,8 @@ def test_basic():
     key_cache_out, value_cache_out = call_reshape_and_cache_flash(
         key, value, key_cache, value_cache, slot_mapping
     )
+    # ir1 = torch_xla._XLAC._get_xla_tensors_hlo([key_cache_out, value_cache_out])
+    # print("HLO IR: ", ir1)
     
     xm.mark_step()
     
@@ -204,7 +206,8 @@ def test_with_scaling():
         key, value, key_cache, value_cache, slot_mapping,
         k_scale=k_scale, v_scale=v_scale
     )
-    
+    # ir1 = torch_xla._XLAC._get_xla_tensors_hlo([key_cache_out, value_cache_out])
+    # print("HLO IR: ", ir1)    
     xm.mark_step()
     
     # Check scaling was applied
