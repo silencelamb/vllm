@@ -43,7 +43,7 @@ def main():
         "-D__CUDA_NO_HALF_CONVERSIONS__",
         "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
         "-D__CUDA_NO_HALF2_OPERATORS__",
-        "-Wl,--allow-shlib-undefined",  # Allow undefined symbols that will be resolved at runtime
+        "-Xlinker", "--allow-shlib-undefined",  # Allow undefined symbols that will be resolved at runtime
     ]
     
     print("Compiling with command:")
