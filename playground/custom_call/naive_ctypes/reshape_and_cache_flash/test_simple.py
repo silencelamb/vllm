@@ -17,6 +17,14 @@ def setup_custom_call():
     # Force load torch C++ extension if available
     torch_lib_path = os.path.dirname(torch._C.__file__)
     
+    # Print torch lib path for debugging
+    print(f"Looking for PyTorch libraries in: {torch_lib_path}")
+    
+    # List available .so files
+    if os.path.exists(torch_lib_path):
+        so_files = [f for f in os.listdir(torch_lib_path) if f.endswith('.so')]
+        print(f"Found .so files: {so_files[:5]}...")  # Show first 5
+    
     # Load PyTorch libraries in order to resolve symbols
     libs_to_load = [
         "libc10.so",
@@ -24,16 +32,24 @@ def setup_custom_call():
         "libtorch.so",
         "libtorch_cuda.so",
         "libtorch_cpu.so",  # May still be needed for some symbols
+        "libtorch_python.so",  # Python bindings
     ]
     
+    loaded_any = False
     for lib_name in libs_to_load:
         lib_path = os.path.join(torch_lib_path, lib_name)
         if os.path.exists(lib_path):
             try:
                 ctypes.CDLL(lib_path, ctypes.RTLD_GLOBAL)
                 print(f"✓ Loaded {lib_name}")
+                loaded_any = True
             except OSError as e:
                 print(f"⚠ Could not load {lib_name}: {e}")
+        else:
+            print(f"⚠ {lib_name} not found")
+    
+    if not loaded_any:
+        print("Warning: No PyTorch libraries were loaded. Trying alternative approach...")
             
     # Path to the compiled XLA ops library
     xla_ops_dir = os.path.abspath("../../../../csrc/xla_ops")
