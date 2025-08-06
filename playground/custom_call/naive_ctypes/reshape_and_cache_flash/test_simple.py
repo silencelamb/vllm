@@ -12,6 +12,29 @@ import numpy as np
 
 def setup_custom_call():
     """Compile and register the custom call."""
+    # First, ensure PyTorch CUDA libraries are loaded
+    import torch
+    # Force load torch C++ extension if available
+    torch_lib_path = os.path.dirname(torch._C.__file__)
+    
+    # Load PyTorch libraries in order to resolve symbols
+    libs_to_load = [
+        "libc10.so",
+        "libc10_cuda.so", 
+        "libtorch.so",
+        "libtorch_cuda.so",
+        "libtorch_cpu.so",  # May still be needed for some symbols
+    ]
+    
+    for lib_name in libs_to_load:
+        lib_path = os.path.join(torch_lib_path, lib_name)
+        if os.path.exists(lib_path):
+            try:
+                ctypes.CDLL(lib_path, ctypes.RTLD_GLOBAL)
+                print(f"✓ Loaded {lib_name}")
+            except OSError as e:
+                print(f"⚠ Could not load {lib_name}: {e}")
+            
     # Path to the compiled XLA ops library
     xla_ops_dir = os.path.abspath("../../../../csrc/xla_ops")
     xla_ops_path = os.path.join(xla_ops_dir, "vllm_xla_ops.so")
@@ -23,9 +46,8 @@ def setup_custom_call():
         if os.system(compile_cmd) != 0:
             raise RuntimeError("Compilation failed")
     
-    # Load the library with RTLD_GLOBAL to make symbols available
-    # This should help resolve PyTorch symbols
-    lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
+    # Now load our library with RTLD_LAZY to defer symbol resolution
+    lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL | ctypes.RTLD_LAZY)
     func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
     
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
