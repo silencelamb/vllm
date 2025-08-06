@@ -12,15 +12,19 @@ import numpy as np
 
 def setup_custom_call():
     """Compile and register the custom call."""
+    # Path to the compiled XLA ops library
+    xla_ops_path = "../../../../csrc/xla_ops/vllm_xla_ops.so"
+    
     # Compile if needed
-    if not os.path.exists("reshape_and_cache_flash_xla.so"):
+    if not os.path.exists(xla_ops_path):
         print("Compiling library...")
-        if os.system("bash compile_reshape_and_cache.sh") != 0:
+        compile_cmd = "cd ../../../../csrc/xla_ops && python build_xla_ops.py"
+        if os.system(compile_cmd) != 0:
             raise RuntimeError("Compilation failed")
     
     # Load and register
-    lib = ctypes.CDLL("./reshape_and_cache_flash_xla.so", ctypes.RTLD_GLOBAL)
-    func_addr = ctypes.cast(lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
+    lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
+    func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
     
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
     PyCapsule_New.restype = ctypes.py_object
