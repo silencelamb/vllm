@@ -55,8 +55,12 @@ def call_reshape_and_cache_flash(
     block_size = key_cache.shape[1]
     
     # Map dtype string to integer
-    dtype_map = {"auto": 0, "float32": 0, "float16": 1, "bfloat16": 2}
-    kv_cache_dtype_int = dtype_map.get(kv_cache_dtype, 0)
+    kv_dtype_map = {"auto": 0, "float16": 1, "bfloat16": 2, "float32": 3}
+    kv_cache_dtype_int = kv_dtype_map.get(kv_cache_dtype, 0)
+    
+    # Determine input dtype
+    input_dtype_map = {torch.float32: 0, torch.float16: 1, torch.bfloat16: 2}
+    input_dtype_int = input_dtype_map.get(key.dtype, 0)
     
     # Check if scales are provided
     has_k_scale = k_scale is not None
@@ -64,13 +68,14 @@ def call_reshape_and_cache_flash(
     
     # Create descriptor
     descriptor = struct.pack(
-        'qqqqqibb',
+        'qqqqqiibb',
         num_tokens,
         num_kv_heads,
         head_size,
         num_blocks,
         block_size,
         kv_cache_dtype_int,
+        input_dtype_int,
         1 if has_k_scale else 0,
         1 if has_v_scale else 0
     )
