@@ -103,8 +103,17 @@ void reshape_and_cache_flash_xla_custom_call(
   const void* key_buffer = buffers[2];
   const void* value_buffer = buffers[3];
   const void* slot_mapping_buffer = buffers[4];
-  const void* k_scale_buffer = descriptor.has_k_scale ? buffers[5] : nullptr;
-  const void* v_scale_buffer = descriptor.has_v_scale ? buffers[6] : nullptr;
+  // Handle optional scale buffers correctly
+  int buffer_idx = 5;
+  const void* k_scale_buffer = nullptr;
+  const void* v_scale_buffer = nullptr;
+  
+  if (descriptor.has_k_scale) {
+    k_scale_buffer = buffers[buffer_idx++];
+  }
+  if (descriptor.has_v_scale) {
+    v_scale_buffer = buffers[buffer_idx];
+  }
   
   // For now, only handle float32
   if (descriptor.kv_cache_dtype == 0) {  // float32/auto
