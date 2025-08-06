@@ -46,8 +46,16 @@ def setup_custom_call():
         if os.system(compile_cmd) != 0:
             raise RuntimeError("Compilation failed")
     
-    # Now load our library with RTLD_LAZY to defer symbol resolution
-    lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL | ctypes.RTLD_LAZY)
+    # Now load our library with RTLD_GLOBAL
+    # On Linux, we can use os.RTLD_LAZY if needed
+    try:
+        # Try with RTLD_GLOBAL first
+        lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
+    except OSError as e:
+        print(f"Failed to load with RTLD_GLOBAL: {e}")
+        # Try with default mode
+        lib = ctypes.CDLL(xla_ops_path)
+    
     func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
     
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
