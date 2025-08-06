@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-"""Build XLA custom ops with PyTorch's build system."""
+"""Build XLA custom ops without PyTorch dependencies."""
 
 import os
 import subprocess
-import torch
-from torch.utils.cpp_extension import CUDA_HOME
-
-def get_torch_flags():
-    """Get PyTorch's CUDA compilation flags."""
-    from torch.utils.cpp_extension import _get_cuda_arch_flags
-    
-    # Get PyTorch's include paths
-    torch_include = torch.utils.cpp_extension.include_paths()
-    
-    # Get CUDA arch flags
-    cuda_flags = _get_cuda_arch_flags()
-    
-    return torch_include, cuda_flags
+import sys
 
 def main():
     print("Building vLLM XLA custom ops...")
@@ -25,20 +12,14 @@ def main():
     vllm_root = os.path.abspath("../..")
     csrc_dir = vllm_root + "/csrc"
     
-    # Get PyTorch configuration
-    torch_includes, cuda_flags = get_torch_flags()
+    # Check for CUDA
+    cuda_home = os.environ.get('CUDA_HOME', '/usr/local/cuda')
+    if not os.path.exists(cuda_home):
+        print(f"Warning: CUDA not found at {cuda_home}")
+        cuda_home = "/usr/local/cuda"  # Try default
     
-    # Build include flags
-    include_flags = []
-    for inc in torch_includes:
-        include_flags.append(f"-I{inc}")
-    include_flags.append(f"-I{CUDA_HOME}/include")
-    include_flags.append(f"-I{csrc_dir}")
-    
-    # Get PyTorch library path
-    torch_lib = os.path.dirname(torch._C.__file__)
-    
-    # Build command
+    # Build command - compile without linking PyTorch
+    # The symbols will be resolved at runtime when loaded in Python
     nvcc_cmd = [
         "nvcc",
         "-O2",
@@ -48,19 +29,22 @@ def main():
         "-o", "vllm_xla_ops.so",
         "reshape_and_cache_flash_xla.cu",
         f"{csrc_dir}/cache_kernels.cu",
-        f"-L{CUDA_HOME}/lib64",
-        f"-L{torch_lib}",
+        f"-I{cuda_home}/include",
+        f"-I{csrc_dir}",
+        f"-L{cuda_home}/lib64",
         "-lcudart",
-        "-lc10",
-        "-ltorch",
-        "-ltorch_cpu",
-        "-ltorch_cuda",
-        f"-Wl,-rpath,{torch_lib}",
+        "-gencode", "arch=compute_70,code=sm_70",
+        "-gencode", "arch=compute_75,code=sm_75",
+        "-gencode", "arch=compute_80,code=sm_80",
+        "-gencode", "arch=compute_86,code=sm_86",
+        "-gencode", "arch=compute_89,code=sm_89",
+        "-gencode", "arch=compute_90,code=sm_90",
         "-D__CUDA_NO_HALF_OPERATORS__",
         "-D__CUDA_NO_HALF_CONVERSIONS__",
         "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
         "-D__CUDA_NO_HALF2_OPERATORS__",
-    ] + cuda_flags + include_flags
+        "-Wl,--allow-shlib-undefined",  # Allow undefined symbols that will be resolved at runtime
+    ]
     
     print("Compiling with command:")
     print(" ".join(nvcc_cmd))
@@ -72,15 +56,19 @@ def main():
         
         # Check exported symbols
         print("\nExported symbols:")
-        subprocess.run(["nm", "-D", "vllm_xla_ops.so"], 
-                      stdin=subprocess.PIPE, 
-                      stdout=subprocess.PIPE,
-                      text=True)
         result = subprocess.run(["nm", "-D", "vllm_xla_ops.so"], 
                                capture_output=True, text=True)
         for line in result.stdout.split('\n'):
             if 'vllm_reshape_and_cache_flash_xla' in line:
                 print(line)
+                
+        # Check for undefined symbols (informational)
+        print("\nChecking for undefined symbols (these will be resolved at runtime):")
+        result = subprocess.run(["ldd", "-r", "vllm_xla_ops.so"], 
+                               capture_output=True, text=True, stderr=subprocess.STDOUT)
+        undefined_count = result.stdout.count('undefined symbol')
+        if undefined_count > 0:
+            print(f"  Found {undefined_count} undefined symbols (normal for runtime linking)")
     else:
         print("✗ Build failed")
         exit(1)

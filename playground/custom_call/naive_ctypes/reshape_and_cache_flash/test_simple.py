@@ -12,10 +12,6 @@ import numpy as np
 
 def setup_custom_call():
     """Compile and register the custom call."""
-    # First, ensure PyTorch C++ library is loaded
-    import torch
-    torch.ops.load_library(torch._C._get_loaded_library_path())
-    
     # Path to the compiled XLA ops library
     xla_ops_dir = os.path.abspath("../../../../csrc/xla_ops")
     xla_ops_path = os.path.join(xla_ops_dir, "vllm_xla_ops.so")
@@ -27,10 +23,8 @@ def setup_custom_call():
         if os.system(compile_cmd) != 0:
             raise RuntimeError("Compilation failed")
     
-    # Load with PyTorch's loader to resolve symbols
-    torch.ops.load_library(xla_ops_path)
-    
-    # Also load with ctypes for direct access
+    # Load the library with RTLD_GLOBAL to make symbols available
+    # This should help resolve PyTorch symbols
     lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
     func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
     
