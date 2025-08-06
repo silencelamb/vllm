@@ -64,7 +64,7 @@ def main():
         "-DTORCH_API_INCLUDE_EXTENSION_H",
         "-DTORCH_EXTENSION_NAME=vllm_xla_ops",
         "-D_GLIBCXX_USE_CXX11_ABI=0",
-        f"-Wl,-rpath,{torch_lib_path}",  # Add rpath so it can find c10 at runtime
+        "-Xlinker", f"-rpath={torch_lib_path}",  # Add rpath so it can find c10 at runtime
     ]
     
     print("Compiling with command:")
