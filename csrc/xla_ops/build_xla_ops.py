@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build XLA custom ops without PyTorch dependencies."""
+"""Build XLA custom ops with minimal PyTorch dependencies."""
 
 import os
 import subprocess
@@ -18,7 +18,18 @@ def main():
         print(f"Warning: CUDA not found at {cuda_home}")
         cuda_home = "/usr/local/cuda"  # Try default
     
-    # Build command - compile without linking PyTorch
+    # Find PyTorch installation for headers
+    try:
+        import torch
+        torch_path = os.path.dirname(torch.__file__)
+        torch_include = os.path.join(torch_path, "include")
+        torch_csrc_include = os.path.join(torch_path, "include/torch/csrc/api/include")
+        print(f"Found PyTorch at: {torch_path}")
+    except ImportError:
+        print("Error: PyTorch not found. Please install PyTorch.")
+        sys.exit(1)
+    
+    # Build command - compile with PyTorch headers but minimal linking
     # The symbols will be resolved at runtime when loaded in Python
     nvcc_cmd = [
         "nvcc",
@@ -31,6 +42,8 @@ def main():
         f"{csrc_dir}/cache_kernels.cu",
         f"-I{cuda_home}/include",
         f"-I{csrc_dir}",
+        f"-I{torch_include}",
+        f"-I{torch_csrc_include}",
         f"-L{cuda_home}/lib64",
         "-lcudart",
         "-gencode", "arch=compute_70,code=sm_70",
@@ -43,6 +56,9 @@ def main():
         "-D__CUDA_NO_HALF_CONVERSIONS__",
         "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
         "-D__CUDA_NO_HALF2_OPERATORS__",
+        "-DTORCH_API_INCLUDE_EXTENSION_H",
+        "-DTORCH_EXTENSION_NAME=vllm_xla_ops",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
         "-Xlinker", "--allow-shlib-undefined",  # Allow undefined symbols that will be resolved at runtime
     ]
     
