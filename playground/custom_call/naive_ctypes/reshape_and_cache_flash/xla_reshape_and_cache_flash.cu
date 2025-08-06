@@ -35,48 +35,48 @@ __global__ void reshape_and_cache_kernel(
     int head_size,
     int block_size) {
   
-  int token_idx = blockIdx.x;
-  int head_idx = blockIdx.y;
-  int dim_idx = threadIdx.x;
+  const int token_idx = blockIdx.x;
+  const int64_t slot_idx = slot_mapping[token_idx];
   
-  if (token_idx >= num_tokens || head_idx >= num_kv_heads || dim_idx >= head_size) {
+  // NOTE: slot_idx can be -1 if the token is padded
+  if (slot_idx < 0) {
     return;
   }
   
-  // Get slot index for this token
-  int64_t slot_idx = slot_mapping[token_idx];
-  if (slot_idx < 0) {
-    return;  // Invalid slot
+  const int64_t block_idx = slot_idx / block_size;
+  const int64_t block_offset = slot_idx % block_size;
+  
+  // Process all heads and elements using a loop (like vLLM does)
+  const int n = num_kv_heads * head_size;
+  for (int i = threadIdx.x; i < n; i += blockDim.x) {
+    const int head_idx = i / head_size;
+    const int head_offset = i % head_size;
+    
+    // Calculate input indices
+    const int64_t src_idx = token_idx * num_kv_heads * head_size + i;
+    
+    // Calculate cache indices - layout: [num_blocks, block_size, num_kv_heads, head_size]
+    const int64_t cache_idx = block_idx * (block_size * num_kv_heads * head_size) +
+                             block_offset * (num_kv_heads * head_size) +
+                             head_idx * head_size +
+                             head_offset;
+    
+    // Get key and value
+    float key_val = key[src_idx];
+    float value_val = value[src_idx];
+    
+    // Apply scaling if provided
+    if (k_scale != nullptr) {
+      key_val *= k_scale[0];  // Assuming scalar scale for simplicity
+    }
+    if (v_scale != nullptr) {
+      value_val *= v_scale[0];  // Assuming scalar scale for simplicity
+    }
+    
+    // Write to cache
+    key_cache[cache_idx] = key_val;
+    value_cache[cache_idx] = value_val;
   }
-  
-  // Calculate block and position within block
-  int block_idx = slot_idx / block_size;
-  int block_offset = slot_idx % block_size;
-  
-  // Calculate input indices
-  int input_idx = token_idx * num_kv_heads * head_size + head_idx * head_size + dim_idx;
-  
-  // Calculate cache indices - layout: [num_blocks, block_size, num_kv_heads, head_size]
-  int cache_idx = block_idx * (block_size * num_kv_heads * head_size) +
-                  block_offset * (num_kv_heads * head_size) +
-                  head_idx * head_size +
-                  dim_idx;
-  
-  // Get key and value
-  float key_val = key[input_idx];
-  float value_val = value[input_idx];
-  
-  // Apply scaling if provided
-  if (k_scale != nullptr) {
-    key_val *= k_scale[0];  // Assuming scalar scale for simplicity
-  }
-  if (v_scale != nullptr) {
-    value_val *= v_scale[0];  // Assuming scalar scale for simplicity
-  }
-  
-  // Write to cache
-  key_cache[cache_idx] = key_val;
-  value_cache[cache_idx] = value_val;
 }
 
 // XLA Custom Call implementation
@@ -117,9 +117,9 @@ void reshape_and_cache_flash_xla_custom_call(
   
   // For now, only handle float32
   if (descriptor.kv_cache_dtype == 0) {  // float32/auto
-    // Launch kernel with 3D grid
-    dim3 grid(descriptor.num_tokens, descriptor.num_kv_heads, 1);
-    dim3 block(std::min((int64_t)256, descriptor.head_size), 1, 1);
+    // Launch kernel with 1D grid and 1D block (like vLLM)
+    dim3 grid(descriptor.num_tokens);
+    dim3 block(std::min((int64_t)512, descriptor.num_kv_heads * descriptor.head_size));
     
     reshape_and_cache_kernel<<<grid, block, 0, stream>>>(
         static_cast<float*>(key_cache_buffer),
