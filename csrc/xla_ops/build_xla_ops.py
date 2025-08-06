@@ -81,8 +81,10 @@ def main():
         # Check for undefined symbols (informational)
         print("\nChecking for undefined symbols (these will be resolved at runtime):")
         result = subprocess.run(["ldd", "-r", "vllm_xla_ops.so"], 
-                               capture_output=True, text=True, stderr=subprocess.STDOUT)
-        undefined_count = result.stdout.count('undefined symbol')
+                               capture_output=True, text=True)
+        # Combine stdout and stderr for analysis
+        output = result.stdout + result.stderr
+        undefined_count = output.count('undefined symbol')
         if undefined_count > 0:
             print(f"  Found {undefined_count} undefined symbols (normal for runtime linking)")
     else:
