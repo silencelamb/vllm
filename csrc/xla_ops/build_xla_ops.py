@@ -35,6 +35,9 @@ def main():
     include_flags.append(f"-I{CUDA_HOME}/include")
     include_flags.append(f"-I{csrc_dir}")
     
+    # Get PyTorch library path
+    torch_lib = os.path.dirname(torch._C.__file__)
+    
     # Build command
     nvcc_cmd = [
         "nvcc",
@@ -46,7 +49,13 @@ def main():
         "reshape_and_cache_flash_xla.cu",
         f"{csrc_dir}/cache_kernels.cu",
         f"-L{CUDA_HOME}/lib64",
+        f"-L{torch_lib}",
         "-lcudart",
+        "-lc10",
+        "-ltorch",
+        "-ltorch_cpu",
+        "-ltorch_cuda",
+        f"-Wl,-rpath,{torch_lib}",
         "-D__CUDA_NO_HALF_OPERATORS__",
         "-D__CUDA_NO_HALF_CONVERSIONS__",
         "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",

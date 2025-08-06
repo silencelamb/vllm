@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple test for reshape_and_cache_flash XLA custom call without torch.compile."""
+"""Test for standalone reshape_and_cache_flash XLA custom call."""
 
 import torch
 import torch_xla
@@ -11,26 +11,19 @@ import numpy as np
 
 
 def setup_custom_call():
-    """Compile and register the custom call."""
-    # First, ensure PyTorch C++ library is loaded
-    import torch
-    torch.ops.load_library(torch._C._get_loaded_library_path())
-    
+    """Compile and register the standalone custom call."""
     # Path to the compiled XLA ops library
     xla_ops_dir = os.path.abspath("../../../../csrc/xla_ops")
-    xla_ops_path = os.path.join(xla_ops_dir, "vllm_xla_ops.so")
+    xla_ops_path = os.path.join(xla_ops_dir, "vllm_xla_ops_standalone.so")
     
     # Compile if needed
     if not os.path.exists(xla_ops_path):
-        print("Compiling library...")
-        compile_cmd = f"cd {xla_ops_dir} && python build_xla_ops.py"
+        print("Compiling standalone library...")
+        compile_cmd = f"cd {xla_ops_dir} && python build_xla_ops_standalone.py"
         if os.system(compile_cmd) != 0:
             raise RuntimeError("Compilation failed")
     
-    # Load with PyTorch's loader to resolve symbols
-    torch.ops.load_library(xla_ops_path)
-    
-    # Also load with ctypes for direct access
+    # Load the library
     lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
     func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
     
@@ -147,8 +140,6 @@ def test_basic():
     key_cache_out, value_cache_out = call_reshape_and_cache_flash(
         key, value, key_cache, value_cache, slot_mapping
     )
-    # ir1 = torch_xla._XLAC._get_xla_tensors_hlo([key_cache_out, value_cache_out])
-    # print("HLO IR: ", ir1)
     
     xm.mark_step()
     
@@ -223,8 +214,7 @@ def test_with_scaling():
         key, value, key_cache, value_cache, slot_mapping,
         k_scale=k_scale, v_scale=v_scale
     )
-    # ir1 = torch_xla._XLAC._get_xla_tensors_hlo([key_cache_out, value_cache_out])
-    # print("HLO IR: ", ir1)    
+    
     xm.mark_step()
     
     # Check scaling was applied
@@ -251,7 +241,7 @@ def test_with_scaling():
 
 def main():
     print("="*60)
-    print("Simple reshape_and_cache_flash XLA Custom Call Test")
+    print("Standalone reshape_and_cache_flash XLA Custom Call Test")
     print("="*60)
     
     # Setup
