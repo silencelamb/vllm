@@ -32,7 +32,7 @@ def main():
     # Get torch lib path
     torch_lib_path = os.path.join(torch_path, "lib")
     
-    # Build command - link with c10 to resolve assertion symbols
+    # Build command - link with PyTorch libraries to resolve all symbols
     nvcc_cmd = [
         "nvcc",
         "-O2",
@@ -49,8 +49,10 @@ def main():
         f"-L{cuda_home}/lib64",
         f"-L{torch_lib_path}",
         "-lcudart",
-        "-lc10",  # Link c10 to resolve assertion symbols
-        "-lc10_cuda",  # Link c10_cuda as well
+        "-lc10",  # Link c10 
+        "-lc10_cuda",  # Link c10_cuda
+        "-ltorch",  # Link torch to resolve AutogradMeta
+        "-ltorch_cpu",  # Link torch_cpu for CPU operations
         "-gencode", "arch=compute_70,code=sm_70",
         "-gencode", "arch=compute_75,code=sm_75",
         "-gencode", "arch=compute_80,code=sm_80",
@@ -64,7 +66,7 @@ def main():
         "-DTORCH_API_INCLUDE_EXTENSION_H",
         "-DTORCH_EXTENSION_NAME=vllm_xla_ops",
         "-D_GLIBCXX_USE_CXX11_ABI=0",
-        "-Xlinker", f"-rpath={torch_lib_path}",  # Add rpath so it can find c10 at runtime
+        "-Xlinker", f"-rpath={torch_lib_path}",  # Add rpath so it can find libraries at runtime
     ]
     
     print("Compiling with command:")
