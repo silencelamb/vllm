@@ -12,45 +12,8 @@ import numpy as np
 
 def setup_custom_call():
     """Compile and register the custom call."""
-    # First, ensure PyTorch CUDA libraries are loaded
     import torch
-    # Force load torch C++ extension if available
-    torch_lib_path = os.path.dirname(torch._C.__file__)
     
-    # Print torch lib path for debugging
-    print(f"Looking for PyTorch libraries in: {torch_lib_path}")
-    
-    # List available .so files
-    if os.path.exists(torch_lib_path):
-        so_files = [f for f in os.listdir(torch_lib_path) if f.endswith('.so')]
-        print(f"Found .so files: {so_files[:5]}...")  # Show first 5
-    
-    # Load PyTorch libraries in order to resolve symbols
-    libs_to_load = [
-        "libc10.so",
-        "libc10_cuda.so", 
-        "libtorch.so",
-        "libtorch_cuda.so",
-        "libtorch_cpu.so",  # May still be needed for some symbols
-        "libtorch_python.so",  # Python bindings
-    ]
-    
-    loaded_any = False
-    for lib_name in libs_to_load:
-        lib_path = os.path.join(torch_lib_path, lib_name)
-        if os.path.exists(lib_path):
-            try:
-                ctypes.CDLL(lib_path, ctypes.RTLD_GLOBAL)
-                print(f"✓ Loaded {lib_name}")
-                loaded_any = True
-            except OSError as e:
-                print(f"⚠ Could not load {lib_name}: {e}")
-        else:
-            print(f"⚠ {lib_name} not found")
-    
-    if not loaded_any:
-        print("Warning: No PyTorch libraries were loaded. Trying alternative approach...")
-            
     # Path to the compiled XLA ops library
     xla_ops_dir = os.path.abspath("../../../../csrc/xla_ops")
     xla_ops_path = os.path.join(xla_ops_dir, "vllm_xla_ops.so")
@@ -62,17 +25,32 @@ def setup_custom_call():
         if os.system(compile_cmd) != 0:
             raise RuntimeError("Compilation failed")
     
-    # Now load our library with RTLD_GLOBAL
-    # On Linux, we can use os.RTLD_LAZY if needed
+    # Try using torch.ops.load_library which handles PyTorch symbols better
     try:
-        # Try with RTLD_GLOBAL first
+        torch.ops.load_library(xla_ops_path)
+        print(f"✓ Loaded library with torch.ops.load_library")
+        
+        # Now also load with ctypes to get the function address
         lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
-    except OSError as e:
-        print(f"Failed to load with RTLD_GLOBAL: {e}")
-        # Try with default mode
-        lib = ctypes.CDLL(xla_ops_path)
-    
-    func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
+        func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
+    except Exception as e:
+        print(f"Failed with torch.ops.load_library, trying direct ctypes: {e}")
+        
+        # Fallback: Load with ctypes directly
+        # First ensure libc10 symbols are available
+        torch_lib_path = os.path.dirname(torch._C.__file__)
+        libc10_path = os.path.join(torch_lib_path, "libc10.so")
+        if os.path.exists(libc10_path):
+            # Load with RTLD_NOW | RTLD_GLOBAL to force immediate symbol resolution
+            import ctypes.util
+            RTLD_NOW = 0x00002  # Linux constant
+            RTLD_GLOBAL = ctypes.RTLD_GLOBAL
+            ctypes.CDLL(libc10_path, RTLD_NOW | RTLD_GLOBAL)
+            print(f"✓ Pre-loaded libc10.so")
+        
+        # Now try loading our library
+        lib = ctypes.CDLL(xla_ops_path, ctypes.RTLD_GLOBAL)
+        func_addr = ctypes.cast(lib.vllm_reshape_and_cache_flash_xla, ctypes.c_void_p).value
     
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
     PyCapsule_New.restype = ctypes.py_object
