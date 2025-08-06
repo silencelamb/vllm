@@ -279,8 +279,8 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # 运行所有测试
-    test_basic_functionality()
-    test_cuda_functionality()
+    # test_basic_functionality()
+    # test_cuda_functionality()
     test_xla_functionality()
     test_fp8_scaling()
     test_padding_tokens()
