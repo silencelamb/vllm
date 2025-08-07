@@ -6,6 +6,7 @@ import torch_xla
 import torch_xla.core.xla_model as xm
 import ctypes
 import os
+import struct
 
 
 def setup_custom_call():
@@ -45,14 +46,19 @@ def test_direct_xla():
     device = xm.xla_device()
     a = torch.tensor([1.0, 2.0, 3.0]).to(device)
     b = torch.tensor([4.0, 5.0, 6.0]).to(device)
-    
+
+    # Encode size as backend_config (int32 in little-endian)
+    # Size is the total number of elements
+    shape = list(a.shape)  # Get shape from input tensor a
+    size = a.numel()  # Total number of elements
+    backend_config = struct.pack('<i', size)  # '<i' = little-endian int32
     result = torch_xla._XLAC._xla_custom_call(
         [a, b],
         "XlaGpuSimpleAdd",
-        [[3]],
+        [shape],
         [torch.float32],
         False,
-        "",
+        backend_config,
         1,
         {}
     )[0]
@@ -71,16 +77,22 @@ def test_torch_compile_with_custom_op():
     lib = torch.library.Library("custom_xla", "DEF")
     lib.define("gpu_add(Tensor a, Tensor b) -> Tensor")
     
+
     # Implementation for XLA
     @torch.library.impl(lib, "gpu_add", "XLA")
     def gpu_add_xla(a, b):
+        # Encode size as backend_config (int32 in little-endian)
+        # Size is the total number of elements
+        shape = list(a.shape)  # Get shape from input tensor a
+        size = a.numel()  # Total number of elements
+        backend_config = struct.pack('<i', size)  # '<i' = little-endian int32
         return torch_xla._XLAC._xla_custom_call(
             [a, b],
             "XlaGpuSimpleAdd",
-            [list(a.shape)],
+            [shape],
             [a.dtype],
             False,
-            "",
+            backend_config,  # backend_config with size
             1,
             {}
         )[0]
@@ -151,13 +163,18 @@ def test_mixed_function():
     # Implementation for XLA
     @torch.library.impl(lib, "gpu_add", "XLA")
     def gpu_add_xla(a, b):
+        # Encode size as backend_config (int32 in little-endian)
+        # Size is the total number of elements
+        shape = list(a.shape)  # Get shape from input tensor a
+        size = a.numel()  # Total number of elements
+        backend_config = struct.pack('<i', size)  # '<i' = little-endian int32
         return torch_xla._XLAC._xla_custom_call(
             [a, b],
             "XlaGpuSimpleAdd",
-            [list(a.shape)],
+            [shape],
             [a.dtype],
             False,
-            "",
+            backend_config,  # backend_config with size
             1,
             {}
         )[0]
@@ -215,7 +232,7 @@ def main():
         return
     
     # Run tests
-    # test_direct_xla()
+    test_direct_xla()
     # test_torch_compile_with_custom_op()
     test_mixed_function()
     
