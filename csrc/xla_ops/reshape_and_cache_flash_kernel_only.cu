@@ -51,17 +51,26 @@ __global__ void reshape_and_cache_flash_kernel(
     
     // For kAuto mode, no fp8 conversion
     if (kv_dt == Fp8KVCacheDataType::kAuto) {
-      // Apply scaling only for float32
-      if (sizeof(scalar_t) == sizeof(float) && sizeof(cache_t) == sizeof(float)) {
+      // Apply scaling if provided
+      if (k_scale != nullptr || v_scale != nullptr) {
+        // Convert to float for scaling, then back to target type
+        float key_float = static_cast<float>(tgt_key);
+        float value_float = static_cast<float>(tgt_value);
+        
         if (k_scale != nullptr) {
-          tgt_key = tgt_key * k_scale[0];
+          key_float = key_float * k_scale[0];
         }
         if (v_scale != nullptr) {
-          tgt_value = tgt_value * v_scale[0];
+          value_float = value_float * v_scale[0];
         }
+        
+        key_cache[tgt_key_value_idx] = cache_t(key_float);
+        value_cache[tgt_key_value_idx] = cache_t(value_float);
+      } else {
+        // No scaling, direct copy
+        key_cache[tgt_key_value_idx] = cache_t(tgt_key);
+        value_cache[tgt_key_value_idx] = cache_t(tgt_value);
       }
-      key_cache[tgt_key_value_idx] = cache_t(tgt_key);
-      value_cache[tgt_key_value_idx] = cache_t(tgt_value);
     }
   }
 }
