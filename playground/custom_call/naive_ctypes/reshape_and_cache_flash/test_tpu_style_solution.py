@@ -8,6 +8,15 @@ import torch_xla.core.xla_model as xm
 import ctypes
 import struct
 from torch.library import Library
+import numpy as np
+
+# Try to import vLLM's reshape_and_cache_flash for comparison
+try:
+    from vllm.attention.utils.fa_utils import reshape_and_cache_flash
+    HAS_VLLM = True
+except ImportError:
+    print("⚠ vLLM reshape_and_cache_flash not available for comparison")
+    HAS_VLLM = False
 
 
 # Create library for our custom ops
@@ -223,6 +232,114 @@ def test_torch_compile():
         traceback.print_exc()
 
 
+def test_comparison_with_vllm():
+    """Compare XLA custom call results with vLLM's native implementation."""
+    print("\n" + "="*60)
+    print("Comparing XLA custom call with vLLM native implementation")
+    print("="*60)
+    
+    if not HAS_VLLM:
+        print("⚠ Skipping comparison test - vLLM not available")
+        return
+    
+    # Use CUDA device for vLLM comparison
+    cuda_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    xla_device = xm.xla_device()
+    
+    # Create test data
+    num_tokens = 4
+    num_kv_heads = 2
+    head_size = 8
+    num_blocks = 2
+    block_size = 16
+    
+    # Initialize tensors on CUDA for vLLM
+    key_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
+    value_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
+    key_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
+    value_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
+    slot_mapping_cuda = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=cuda_device)
+    
+    # Clone for XLA (convert to XLA device)
+    key_xla = key_cuda.detach().clone().to(xla_device)
+    value_xla = value_cuda.detach().clone().to(xla_device)
+    key_cache_xla = key_cache_cuda.detach().clone().to(xla_device)
+    value_cache_xla = value_cache_cuda.detach().clone().to(xla_device)
+    slot_mapping_xla = slot_mapping_cuda.detach().clone().to(xla_device)
+    
+    # Call vLLM's native implementation
+    print("\n1. Calling vLLM native implementation...")
+    reshape_and_cache_flash(
+        key_cuda,
+        value_cuda,
+        key_cache_cuda,
+        value_cache_cuda,
+        slot_mapping_cuda,
+        "auto",  # kv_cache_dtype
+        None,    # k_scale
+        None,    # v_scale
+    )
+    
+    # Call XLA custom call
+    print("2. Calling XLA custom call implementation...")
+    reshape_and_cache_flash_tpu_style(
+        key_xla,
+        value_xla,
+        key_cache_xla,
+        value_cache_xla,
+        slot_mapping_xla,
+        "auto",
+        None,
+        None
+    )
+    xm.mark_step()
+    
+    # Compare results
+    print("\n3. Comparing results...")
+    
+    # Move XLA results back to CPU for comparison
+    key_cache_xla_cpu = key_cache_xla.cpu()
+    value_cache_xla_cpu = value_cache_xla.cpu()
+    key_cache_cuda_cpu = key_cache_cuda.cpu()
+    value_cache_cuda_cpu = value_cache_cuda.cpu()
+    
+    # Calculate differences
+    key_diff = torch.abs(key_cache_xla_cpu - key_cache_cuda_cpu)
+    value_diff = torch.abs(value_cache_xla_cpu - value_cache_cuda_cpu)
+    
+    key_max_diff = key_diff.max().item()
+    value_max_diff = value_diff.max().item()
+    key_mean_diff = key_diff.mean().item()
+    value_mean_diff = value_diff.mean().item()
+    
+    print(f"\nResults:")
+    print(f"  Key cache:")
+    print(f"    Max difference: {key_max_diff:.6e}")
+    print(f"    Mean difference: {key_mean_diff:.6e}")
+    print(f"  Value cache:")
+    print(f"    Max difference: {value_max_diff:.6e}")
+    print(f"    Mean difference: {value_mean_diff:.6e}")
+    
+    # Check if results are close enough (accounting for floating point errors)
+    tolerance = 1e-5
+    if key_max_diff < tolerance and value_max_diff < tolerance:
+        print("\n✅ Results match! XLA custom call produces same output as vLLM")
+    else:
+        print(f"\n⚠ Results differ beyond tolerance ({tolerance})")
+        
+        # Show some actual values for debugging
+        print("\nSample values at slot 0:")
+        print(f"  vLLM key_cache[0,0,0,:4]: {key_cache_cuda_cpu[0,0,0,:4]}")
+        print(f"  XLA key_cache[0,0,0,:4]:  {key_cache_xla_cpu[0,0,0,:4]}")
+        
+    # Additional verification: check that non-zero values were written
+    key_nonzero = (key_cache_xla_cpu != 0).sum().item()
+    value_nonzero = (value_cache_xla_cpu != 0).sum().item()
+    print(f"\nNon-zero elements:")
+    print(f"  Key cache: {key_nonzero}/{key_cache_xla_cpu.numel()}")
+    print(f"  Value cache: {value_nonzero}/{value_cache_xla_cpu.numel()}")
+
+
 def test_xla_optimization():
     """Test to verify XLA optimization behavior."""
     print("\n" + "="*60)
@@ -278,6 +395,7 @@ def main():
     # Run tests
     test_basic()
     test_torch_compile()
+    test_comparison_with_vllm()  # New comparison test
     test_xla_optimization()
     
     print("\n" + "="*60)
