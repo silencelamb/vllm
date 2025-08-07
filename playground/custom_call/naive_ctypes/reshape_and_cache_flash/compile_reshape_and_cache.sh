@@ -13,15 +13,24 @@ if [ ! -d "$CUDA_HOME" ]; then
     exit 1
 fi
 
-# CUDA file to compile
-CUDA_FILE="./xla_reshape_and_cache_flash.cu"
+# CUDA files to compile
+XLA_WRAPPER="./xla_reshape_and_cache_flash.cu"
+# Use the standalone kernel that doesn't depend on PyTorch
+VLLM_KERNEL="../../../../csrc/xla_ops/reshape_and_cache_flash_kernel_only.cu"
 
-if [ ! -f "$CUDA_FILE" ]; then
-    echo "Error: $CUDA_FILE not found"
+if [ ! -f "$XLA_WRAPPER" ]; then
+    echo "Error: $XLA_WRAPPER not found"
     exit 1
 fi
 
-# Compile the CUDA file (pure CUDA, no PyTorch headers needed)
+if [ ! -f "$VLLM_KERNEL" ]; then
+    echo "Error: $VLLM_KERNEL not found"
+    echo "Looking for vLLM kernel at: $(realpath $VLLM_KERNEL 2>/dev/null || echo $VLLM_KERNEL)"
+    exit 1
+fi
+
+# Compile both CUDA files together
+# The standalone kernel doesn't need PyTorch headers
 nvcc -O2 -shared -Xcompiler -fPIC \
     -gencode arch=compute_70,code=sm_70 \
     -gencode arch=compute_75,code=sm_75 \
@@ -31,7 +40,7 @@ nvcc -O2 -shared -Xcompiler -fPIC \
     -gencode arch=compute_90,code=sm_90 \
     -Xcompiler -fPIC \
     -o reshape_and_cache_flash_xla.so \
-    $CUDA_FILE \
+    $XLA_WRAPPER $VLLM_KERNEL \
     -I$CUDA_HOME/include \
     -L$CUDA_HOME/lib64 \
     -lcudart
