@@ -34,10 +34,12 @@ def debug_custom_call():
     )
     print("✅ Registered custom call")
     
-    # Create tensors
+    # Create tensors with shape [2, 2]
     device = xm.xla_device()
-    a = torch.tensor([1.0, 2.0, 3.0]).to(device)
-    b = torch.tensor([4.0, 5.0, 6.0]).to(device)
+    a = torch.tensor([[1.0, 2.0], 
+                      [3.0, 4.0]]).to(device)
+    b = torch.tensor([[5.0, 6.0], 
+                      [7.0, 8.0]]).to(device)
     
     # Try different ways to specify the custom call
     print("\n1. Testing with call_target in custom_data:")
@@ -47,14 +49,22 @@ def debug_custom_call():
     # 2: API_VERSION_STATUS_RETURNING
     # 3: API_VERSION_TYPED_FFI
     # 4: STATUS_RETURNING
+    
+    # Encode size as backend_config (int32 in little-endian)
+    # Size is the total number of elements
+    import struct
+    shape = list(a.shape)  # Get shape from input tensor a
+    size = a.numel()  # Total number of elements
+    backend_config = struct.pack('<i', size)  # '<i' = little-endian int32
+    
     try:
         result = torch_xla._XLAC._xla_custom_call(
             [a, b],               # inputs
             "XlaGpuSimpleAdd",    # op_name
-            [[3]],                # output_shapes
+            [shape],              # output_shapes - same as input shape
             [torch.float32],      # output_dtypes
             False,                # has_side_effect
-            "",                   # backend_config
+            backend_config,       # backend_config with size
             api_version,          # api_version
             {}                    # alias_params
         )[0]
@@ -70,9 +80,12 @@ def debug_custom_call():
         print("✅ Execution successful!")
         print(f"✅ SUCCESS with API version {api_version}!")
         print(f"   Result: {result_cpu}")
-        print(f"   Expected: [5.0, 7.0, 9.0]")
         
-        if torch.allclose(result_cpu, torch.tensor([5.0, 7.0, 9.0])):
+        expected = torch.tensor([[6.0, 8.0], 
+                                  [10.0, 12.0]])
+        print(f"   Expected: {expected}")
+        
+        if torch.allclose(result_cpu, expected):
             print("✅ Result is correct!")
 
     except Exception as e:

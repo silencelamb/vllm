@@ -1,6 +1,8 @@
 // Simplest possible XLA Custom Call Implementation
 
 #include <cuda_runtime.h>
+#include <cstddef>  // for size_t
+#include <cstdint>  // for int32_t
 
 // CUDA kernel
 __global__ void SimpleAddKernel(const float* a, const float* b, float* out, int size) {
@@ -23,8 +25,10 @@ void XlaGpuSimpleAdd(
     const float* b = (const float*)buffers[1];
     float* out = (float*)buffers[2];
     
-    // Fixed size for testing
-    const int size = 3;
+    // Extract size from opaque data
+    // opaque contains the element count as int32
+    const int size = opaque_len >= sizeof(int) ? *(const int*)opaque : 0;
+    if (size == 0) return;  // Safety check
     
     // Launch kernel
     const int threads = 256;
