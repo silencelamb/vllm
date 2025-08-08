@@ -107,7 +107,7 @@ def reshape_and_cache_flash_impl(
         [key_cache.dtype, value_cache.dtype],
         False,  # has_side_effect
         descriptor,
-        2,  # num_outputs
+        1,  
         {}
     )
     

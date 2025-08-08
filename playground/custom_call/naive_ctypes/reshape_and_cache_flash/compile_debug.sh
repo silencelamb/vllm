@@ -4,7 +4,7 @@ set -e
 echo "Compiling debug XLA custom call..."
 
 # Compile the debug version
-nvcc -O2 -shared -fPIC \
+nvcc -O2 -shared -Xcompiler -fPIC \
   xla_reshape_and_cache_flash_debug.cu \
   -o reshape_and_cache_flash_xla.so \
   -gencode arch=compute_80,code=sm_80 \
