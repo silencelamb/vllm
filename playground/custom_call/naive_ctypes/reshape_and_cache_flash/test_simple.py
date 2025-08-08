@@ -42,7 +42,6 @@ def setup_custom_call():
         libc10_path = os.path.join(torch_lib_path, "libc10.so")
         if os.path.exists(libc10_path):
             # Load with RTLD_NOW | RTLD_GLOBAL to force immediate symbol resolution
-            import ctypes.util
             RTLD_NOW = 0x00002  # Linux constant
             RTLD_GLOBAL = ctypes.RTLD_GLOBAL
             ctypes.CDLL(libc10_path, RTLD_NOW | RTLD_GLOBAL)
