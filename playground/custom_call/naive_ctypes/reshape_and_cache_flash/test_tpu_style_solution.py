@@ -305,6 +305,10 @@ def test_comparison_with_vllm():
     
     # Call XLA custom call
     print("2. Calling XLA custom call implementation...")
+    
+    # Debug: Check cache before operation
+    print(f"   Before XLA call - key_cache_xla sum: {key_cache_xla.sum().item()}")
+    
     reshape_and_cache_flash_tpu_style(
         key_xla,
         value_xla,
@@ -316,6 +320,9 @@ def test_comparison_with_vllm():
         v_scale_xla
     )
     xm.mark_step()
+    
+    # Debug: Check cache after operation
+    print(f"   After XLA call - key_cache_xla sum: {key_cache_xla.sum().item()}")
     
     # Compare results
     print("\n3. Comparing results...")
