@@ -4,6 +4,7 @@ import torch
 
 import torch_xla.experimental.triton as xla_triton
 import torch_xla
+import torch_xla.core.xla_model as xm
 
 @triton.jit
 def add_kernel(
@@ -48,3 +49,7 @@ payload = xla_triton.triton_call(
 # regarding how the GPU buffers will be loaded when this node is executed.
 output = torch_xla._XLAC._xla_gpu_custom_call([x, y], payload,
                                                 [output.shape], [torch.int64])
+
+xm.mark_step()
+xm.wait_device_ops()
+print("Output:", output)
