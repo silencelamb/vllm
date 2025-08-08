@@ -55,19 +55,28 @@ void reshape_and_cache_flash_xla_custom_call(
   memcpy(&descriptor, opaque, sizeof(ReshapeAndCacheDescriptor));
   
   // Extract buffers in the expected order
-  // XLA passes outputs first, then inputs
-  // Outputs: key_cache, value_cache (indices 0, 1)
-  // Inputs: key_cache_in, value_cache_in, key, value, slot_mapping, [k_scale], [v_scale]
-  // For in-place operation, output and input caches are the same tensors
-  void* key_cache_buffer = buffers[0];      // output
-  void* value_cache_buffer = buffers[1];    // output
-  // Skip input caches at indices 2, 3 (they're the same as outputs for in-place)
-  const void* key_buffer = buffers[4];      // input key
-  const void* value_buffer = buffers[5];    // input value
-  const void* slot_mapping_buffer = buffers[6];  // input slot_mapping
+  // IMPORTANT: On GPU, the LAST num_outputs buffers are outputs!
+  // With num_outputs=2, buffer order is:
+  // Inputs:
+  // - buffers[0] = input key
+  // - buffers[1] = input value
+  // - buffers[2] = input key_cache
+  // - buffers[3] = input value_cache
+  // - buffers[4] = input slot_mapping
+  // - buffers[5] = input k_scale (if has_k_scale)
+  // - buffers[6] = input v_scale (if has_v_scale)
+  // Outputs (last 2):
+  // - buffers[N-2] = output key_cache (same tensor as input for in-place)
+  // - buffers[N-1] = output value_cache (same tensor as input for in-place)
+  
+  const void* key_buffer = buffers[0];      // input key
+  const void* value_buffer = buffers[1];    // input value
+  void* key_cache_buffer = buffers[2];      // input key_cache (modified in-place)
+  void* value_cache_buffer = buffers[3];    // input value_cache (modified in-place)
+  const void* slot_mapping_buffer = buffers[4];  // input slot_mapping
   
   // Handle optional scale buffers correctly
-  int buffer_idx = 7;
+  int buffer_idx = 5;  // Start after slot_mapping
   const float* k_scale_buffer = nullptr;
   const float* v_scale_buffer = nullptr;
   

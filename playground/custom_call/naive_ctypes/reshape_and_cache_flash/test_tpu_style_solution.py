@@ -85,19 +85,18 @@ def reshape_and_cache_flash_impl(
         1 if has_v_scale else 0
     )
     
-    # Important: XLA custom call expects inputs and outputs separately
-    # The first num_outputs tensors in the buffers list are outputs
-    # For in-place operations, we need to pass the same tensors as both input and output
+    # XLA custom call buffer ordering for GPU:
+    # IMPORTANT: On GPU, the LAST num_outputs buffers are outputs!
+    # For in-place operations, we pass the cache buffers as both input and output
     
-    # Prepare buffers: outputs first, then inputs
-    # Outputs: key_cache, value_cache (will be modified in-place)
-    # Inputs: key_cache, value_cache, key, value, slot_mapping, [k_scale], [v_scale]
-    buffers = [key_cache, value_cache,  # outputs (first 2)
-               key_cache, value_cache, key, value, slot_mapping]  # inputs
+    # Order: inputs first, then outputs at the end
+    buffers = [key, value, key_cache, value_cache, slot_mapping]  # inputs
     if has_k_scale:
         buffers.append(k_scale)
     if has_v_scale:
         buffers.append(v_scale)
+    # Add outputs at the end (same tensors as input caches for in-place)
+    buffers.extend([key_cache, value_cache])  # outputs (last 2)
     
     # Call XLA custom op
     # Note: num_outputs=2 tells XLA that the first 2 buffers are outputs
