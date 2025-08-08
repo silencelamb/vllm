@@ -60,20 +60,27 @@ void reshape_and_cache_flash_xla_custom_call(
   // Inputs:
   // - buffers[0] = input key
   // - buffers[1] = input value
-  // - buffers[2] = input key_cache
-  // - buffers[3] = input value_cache
+  // - buffers[2] = input key_cache (for reading)
+  // - buffers[3] = input value_cache (for reading)
   // - buffers[4] = input slot_mapping
   // - buffers[5] = input k_scale (if has_k_scale)
   // - buffers[6] = input v_scale (if has_v_scale)
   // Outputs (last 2):
-  // - buffers[N-2] = output key_cache (same tensor as input for in-place)
-  // - buffers[N-1] = output value_cache (same tensor as input for in-place)
+  // - buffers[7 or N-2] = output key_cache (to write, same tensor as input for in-place)
+  // - buffers[8 or N-1] = output value_cache (to write, same tensor as input for in-place)
+  
+  // Calculate total number of buffers
+  int num_input_buffers = 5;  // key, value, key_cache, value_cache, slot_mapping
+  if (descriptor.has_k_scale) num_input_buffers++;
+  if (descriptor.has_v_scale) num_input_buffers++;
   
   const void* key_buffer = buffers[0];      // input key
   const void* value_buffer = buffers[1];    // input value
-  void* key_cache_buffer = buffers[2];      // input key_cache (modified in-place)
-  void* value_cache_buffer = buffers[3];    // input value_cache (modified in-place)
   const void* slot_mapping_buffer = buffers[4];  // input slot_mapping
+  
+  // Output buffers are at the end
+  void* key_cache_buffer = buffers[num_input_buffers];      // output key_cache
+  void* value_cache_buffer = buffers[num_input_buffers + 1];  // output value_cache
   
   // Handle optional scale buffers correctly
   int buffer_idx = 5;  // Start after slot_mapping
