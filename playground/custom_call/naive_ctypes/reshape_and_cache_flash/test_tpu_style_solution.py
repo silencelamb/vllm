@@ -179,9 +179,13 @@ def test_basic():
     value_ptr = value_cache.data_ptr()
     
     # Call TPU-style
+    # Create scale tensors (1.0 means no scaling)
+    k_scale = torch.ones(1, dtype=torch.float32, device=device)
+    v_scale = torch.ones(1, dtype=torch.float32, device=device)
+    
     reshape_and_cache_flash_tpu_style(
         key, value, key_cache, value_cache,
-        slot_mapping, "auto", None, None
+        slot_mapping, "auto", k_scale, v_scale
     )
     
     xm.mark_step()
@@ -204,9 +208,13 @@ def test_torch_compile():
     
     @torch.compile(backend="openxla")
     def compiled_update(key, value, key_cache, value_cache, slot_mapping):
+        # Create scale tensors (1.0 means no scaling)
+        k_scale = torch.ones(1, dtype=torch.float32, device=device)
+        v_scale = torch.ones(1, dtype=torch.float32, device=device)
+        
         reshape_and_cache_flash_tpu_style(
             key, value, key_cache, value_cache,
-            slot_mapping, "auto", None, None
+            slot_mapping, "auto", k_scale, v_scale
         )
         return key_cache.abs().mean() + value_cache.abs().mean()
     
@@ -267,6 +275,10 @@ def test_comparison_with_vllm():
     value_cache_xla = value_cache_cuda.detach().clone().to(xla_device)
     slot_mapping_xla = slot_mapping_cuda.detach().clone().to(xla_device)
     
+    # Create scale tensors (1.0 means no scaling)
+    k_scale_cuda = torch.ones(1, dtype=torch.float32, device=cuda_device)
+    v_scale_cuda = torch.ones(1, dtype=torch.float32, device=cuda_device)
+    
     # Call vLLM's native implementation
     print("\n1. Calling vLLM native implementation...")
     reshape_and_cache_flash(
@@ -276,9 +288,13 @@ def test_comparison_with_vllm():
         value_cache_cuda,
         slot_mapping_cuda,
         "auto",  # kv_cache_dtype
-        None,    # k_scale
-        None,    # v_scale
+        k_scale_cuda,    # k_scale
+        v_scale_cuda,    # v_scale
     )
+    
+    # Create scale tensors for XLA (1.0 means no scaling)
+    k_scale_xla = torch.ones(1, dtype=torch.float32, device=xla_device)
+    v_scale_xla = torch.ones(1, dtype=torch.float32, device=xla_device)
     
     # Call XLA custom call
     print("2. Calling XLA custom call implementation...")
@@ -289,8 +305,8 @@ def test_comparison_with_vllm():
         value_cache_xla,
         slot_mapping_xla,
         "auto",
-        None,
-        None
+        k_scale_xla,
+        v_scale_xla
     )
     xm.mark_step()
     
@@ -356,9 +372,13 @@ def test_xla_optimization():
     def optimized_fn(key, value, key_cache, value_cache, slot_mapping):
         # Multiple updates to test optimization
         for _ in range(3):
+            # Create scale tensors (1.0 means no scaling)
+            k_scale = torch.ones(1, dtype=torch.float32, device=key.device)
+            v_scale = torch.ones(1, dtype=torch.float32, device=value.device)
+            
             reshape_and_cache_flash_tpu_style(
                 key, value, key_cache, value_cache,
-                slot_mapping, "auto", None, None
+                slot_mapping, "auto", k_scale, v_scale
             )
         return key_cache.sum()
     
