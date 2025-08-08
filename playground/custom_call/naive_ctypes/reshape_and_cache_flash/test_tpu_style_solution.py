@@ -85,22 +85,30 @@ def reshape_and_cache_flash_impl(
         1 if has_v_scale else 0
     )
     
-    # Prepare buffers
-    buffers = [key_cache, value_cache, key, value, slot_mapping]
+    # Important: XLA custom call expects inputs and outputs separately
+    # The first num_outputs tensors in the buffers list are outputs
+    # For in-place operations, we need to pass the same tensors as both input and output
+    
+    # Prepare buffers: outputs first, then inputs
+    # Outputs: key_cache, value_cache (will be modified in-place)
+    # Inputs: key_cache, value_cache, key, value, slot_mapping, [k_scale], [v_scale]
+    buffers = [key_cache, value_cache,  # outputs (first 2)
+               key_cache, value_cache, key, value, slot_mapping]  # inputs
     if has_k_scale:
         buffers.append(k_scale)
     if has_v_scale:
         buffers.append(v_scale)
     
     # Call XLA custom op
+    # Note: num_outputs=2 tells XLA that the first 2 buffers are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
         "vllm_reshape_and_cache_flash",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
-        False,
+        False,  # has_side_effect
         descriptor,
-        2,
+        2,  # num_outputs
         {}
     )
     

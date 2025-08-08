@@ -55,14 +55,19 @@ void reshape_and_cache_flash_xla_custom_call(
   memcpy(&descriptor, opaque, sizeof(ReshapeAndCacheDescriptor));
   
   // Extract buffers in the expected order
-  void* key_cache_buffer = buffers[0];
-  void* value_cache_buffer = buffers[1];
-  const void* key_buffer = buffers[2];
-  const void* value_buffer = buffers[3];
-  const void* slot_mapping_buffer = buffers[4];
+  // XLA passes outputs first, then inputs
+  // Outputs: key_cache, value_cache (indices 0, 1)
+  // Inputs: key_cache_in, value_cache_in, key, value, slot_mapping, [k_scale], [v_scale]
+  // For in-place operation, output and input caches are the same tensors
+  void* key_cache_buffer = buffers[0];      // output
+  void* value_cache_buffer = buffers[1];    // output
+  // Skip input caches at indices 2, 3 (they're the same as outputs for in-place)
+  const void* key_buffer = buffers[4];      // input key
+  const void* value_buffer = buffers[5];    // input value
+  const void* slot_mapping_buffer = buffers[6];  // input slot_mapping
   
   // Handle optional scale buffers correctly
-  int buffer_idx = 5;
+  int buffer_idx = 7;
   const float* k_scale_buffer = nullptr;
   const float* v_scale_buffer = nullptr;
   
