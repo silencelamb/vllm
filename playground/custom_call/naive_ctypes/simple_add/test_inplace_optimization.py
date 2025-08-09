@@ -29,8 +29,14 @@ inplace_capsule = PyCapsule_New(inplace_addr, None, None)
 torch_xla._XLAC._xla_register_custom_call_target("XlaGpuInplaceAdd", inplace_capsule, "CUDA")
 
 # Register regular add for comparison
+lib = ctypes.CDLL("./inplace_add.so", ctypes.RTLD_GLOBAL)
 regular_func = lib.XlaGpuRegularAdd
 regular_addr = ctypes.cast(regular_func, ctypes.c_void_p).value
+
+PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+PyCapsule_New.restype = ctypes.py_object
+PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
 regular_capsule = PyCapsule_New(regular_addr, None, None)
 torch_xla._XLAC._xla_register_custom_call_target("XlaGpuRegularAdd", regular_capsule, "CUDA")
 
@@ -40,7 +46,7 @@ print("✓ Custom calls registered\n")
 inplace_lib = Library("xla_inplace", "DEF")
 
 # Define in-place operation
-inplace_lib.define("inplace_add(Tensor(a!) output, Tensor input) -> Tensor")
+inplace_lib.define("inplace_add(Tensor output, Tensor input) -> Tensor")
 
 def inplace_add_xla(output, input):
     """In-place add: output += input"""
@@ -66,7 +72,7 @@ inplace_lib.impl("inplace_add", inplace_add_xla, "XLA")
 def inplace_add_abstract(output, input):
     return output
 
-inplace_lib.impl_abstract("inplace_add", inplace_add_abstract)
+inplace_lib._register_fake("inplace_add", inplace_add_abstract)
 
 # Define regular add for comparison
 inplace_lib.define("regular_add(Tensor a, Tensor b) -> Tensor")
@@ -94,7 +100,7 @@ inplace_lib.impl("regular_add", regular_add_xla, "XLA")
 def regular_add_abstract(a, b):
     return torch.empty_like(a)
 
-inplace_lib.impl_abstract("regular_add", regular_add_abstract)
+inplace_lib._register_fake("regular_add", regular_add_abstract)
 
 
 def test_without_compile():
