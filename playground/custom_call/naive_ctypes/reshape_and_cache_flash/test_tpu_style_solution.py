@@ -111,7 +111,10 @@ def reshape_and_cache_flash_impl(
         {}
     )
     
-    return outputs[0], outputs[1]
+    # WORKAROUND: XLA custom call on GPU doesn't properly return the modified buffers
+    # The in-place modification happens correctly, but outputs are zeros
+    # So we return the original caches which have been modified in-place
+    return key_cache, value_cache
 
 
 # Define the operation that returns new tensors
@@ -160,9 +163,9 @@ def reshape_and_cache_flash_tpu_style(
         slot_mapping, kv_cache_dtype, k_scale, v_scale
     )
     
-    # Copy back (will be optimized away by XLA)
-    # NOTE: the in-place copy will be optimized away by XLA compiler
-    # when buffer donor is set
+    # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
+    # Since our custom op returns the modified caches (workaround for XLA GPU issue),
+    # this copy is essentially a no-op but maintains compatibility with TPU pattern
     key_cache.copy_(new_key_cache)
     value_cache.copy_(new_value_cache)
 
