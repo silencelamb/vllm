@@ -88,17 +88,18 @@ void reshape_and_cache_flash_xla_custom_call(cudaStream_t stream,
   const float* k_scale_buffer = nullptr;
   const float* v_scale_buffer = nullptr;
 
+  int scale_buffer_idx = num_input_buffers;
   if (descriptor.has_k_scale) {
-    k_scale_buffer = static_cast<const float*>(buffers[num_input_buffers++]);
+    k_scale_buffer = static_cast<const float*>(buffers[scale_buffer_idx++]);
   }
   if (descriptor.has_v_scale) {
-    v_scale_buffer = static_cast<const float*>(buffers[num_input_buffers++]);
+    v_scale_buffer = static_cast<const float*>(buffers[scale_buffer_idx++]);
   }
 
-  // Output buffers are at the end
-  void* key_cache_buffer = buffers[num_input_buffers++];  // output key_cache
-  void* value_cache_buffer =
-      buffers[num_input_buffers++];  // output value_cache
+  // Output buffers are at the end, after all input buffers including scales
+  int output_buffer_start = scale_buffer_idx;
+  void* key_cache_buffer = buffers[output_buffer_start];      // output key_cache
+  void* value_cache_buffer = buffers[output_buffer_start + 1];  // output value_cache
 
   for (int i = 0; i < num_input_buffers; ++i) {
     printf("buffers[%d]: %p\n", i, buffers[i]);
@@ -136,6 +137,12 @@ void reshape_and_cache_flash_xla_custom_call(cudaStream_t stream,
           page_stride, head_stride, key_stride, value_stride,
           descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
           k_scale_buffer, v_scale_buffer);
+  
+  // Ensure kernel completes before returning
+  cudaError_t err = cudaStreamSynchronize(stream);
+  if (err != cudaSuccess) {
+    printf("CUDA error in reshape_and_cache_flash: %s\n", cudaGetErrorString(err));
+  }
 }
 
 }  // extern "C"

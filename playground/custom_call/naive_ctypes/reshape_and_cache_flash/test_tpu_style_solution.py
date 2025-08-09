@@ -99,15 +99,15 @@ def reshape_and_cache_flash_impl(
     buffers.extend([key_cache, value_cache])  # outputs (last 2)
     
     # Call XLA custom op
-    # Note: num_outputs=2 tells XLA that the first 2 buffers are outputs
+    # Note: The LAST 2 buffers in the list are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
         "vllm_reshape_and_cache_flash",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
-        False,  # has_side_effect
+        True,  # has_side_effect - this operation modifies the cache buffers
         descriptor,
-        1,  
+        1,  # api_version
         {}
     )
     
