@@ -6,14 +6,13 @@ import sys
 import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
-import torch_xla._XLAC as xlac
 from torch.library import Library
 import ctypes
 import struct
 
 # Compile the kernel
 print("Compiling in-place kernel...")
-os.system("nvcc -shared -fPIC -o inplace_add.so inplace_add_kernel.cu -lcudart")
+os.system("nvcc -shared -Xcompiler -fPIC -o inplace_add.so inplace_add_kernel.cu -lcudart")
 
 # Load and register the kernels
 lib = ctypes.CDLL("./inplace_add.so", ctypes.RTLD_GLOBAL)
@@ -27,13 +26,13 @@ PyCapsule_New.restype = ctypes.py_object
 PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
 
 inplace_capsule = PyCapsule_New(inplace_addr, None, None)
-xlac._xla_register_custom_call_target("XlaGpuInplaceAdd", inplace_capsule, "CUDA")
+torch_xla._XLAC._xla_register_custom_call_target("XlaGpuInplaceAdd", inplace_capsule, "CUDA")
 
 # Register regular add for comparison
 regular_func = lib.XlaGpuRegularAdd
 regular_addr = ctypes.cast(regular_func, ctypes.c_void_p).value
 regular_capsule = PyCapsule_New(regular_addr, None, None)
-xlac._xla_register_custom_call_target("XlaGpuRegularAdd", regular_capsule, "CUDA")
+torch_xla._XLAC._xla_register_custom_call_target("XlaGpuRegularAdd", regular_capsule, "CUDA")
 
 print("✓ Custom calls registered\n")
 
@@ -50,7 +49,7 @@ def inplace_add_xla(output, input):
     backend_config = struct.pack('<i', size)
     
     # For in-place operation, pass output as both input and output
-    result = xlac._xla_custom_call(
+    result = torch_xla._XLAC._xla_custom_call(
         [input, output],  # input first, then output
         "XlaGpuInplaceAdd",
         [list(output.shape)],  # output shape
@@ -75,7 +74,7 @@ def regular_add_xla(a, b):
     size = a.numel()
     backend_config = struct.pack('<i', size)
     
-    result = xlac._xla_custom_call(
+    result = torch_xla._XLAC._xla_custom_call(
         [a, b],  # inputs
         "XlaGpuRegularAdd",
         [list(a.shape)],  # output shape
