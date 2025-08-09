@@ -192,8 +192,8 @@ def test_torch_compile():
         torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
         torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
         new_key_cache, new_value_cache = compiled_update(key, value, key_cache, value_cache, slot_mapping)
-        new_value_cache.copy_(value_cache)
-        new_key_cache.copy_(key_cache)
+        value_cache.copy_(new_value_cache)
+        key_cache.copy_(new_key_cache)
         xm.mark_step()
         xm.wait_device_ops()
         
@@ -317,8 +317,8 @@ def test_comparison_with_vllm():
     torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
     torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
     new_key_cache, new_value_cache = compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
-    new_value_cache.copy_(value_cache_xla)
-    new_key_cache.copy_(key_cache_xla)
+    value_cache_xla.copy_(new_value_cache)
+    key_cache_xla.copy_(new_key_cache)
     xm.mark_step()
     xm.wait_device_ops()
     
