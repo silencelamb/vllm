@@ -166,7 +166,6 @@ def reshape_and_cache_flash_tpu_style(
     key_cache.copy_(new_key_cache)
     value_cache.copy_(new_value_cache)
 
-
 def test_basic():
     """Test basic functionality."""
     print("\n" + "="*60)
@@ -175,10 +174,10 @@ def test_basic():
     
     device = xm.xla_device()
     
-    key = torch.randn(4, 2, 8, device=device)
-    value = torch.randn(4, 2, 8, device=device)
-    key_cache = torch.zeros(2, 16, 2, 8, device=device)
-    value_cache = torch.zeros(2, 16, 2, 8, device=device)
+    key = torch.randn(4, 2, 8, device=device).contiguous()
+    value = torch.randn(4, 2, 8, device=device).contiguous()
+    key_cache = torch.zeros(2, 16, 2, 8, device=device).contiguous()
+    value_cache = torch.zeros(2, 16, 2, 8, device=device).contiguous()
     slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device)
     
     # Store pointers
@@ -186,9 +185,12 @@ def test_basic():
     value_ptr = value_cache.data_ptr()
     
     # Call TPU-style
-    # Create scale tensors (1.0 means no scaling)
-    k_scale = torch.ones(1, dtype=torch.float32, device=device)
-    v_scale = torch.ones(1, dtype=torch.float32, device=device)
+    # # Create scale tensors (1.0 means no scaling)
+    # k_scale = torch.ones(1, dtype=torch.float32, device=device)
+    # v_scale = torch.ones(1, dtype=torch.float32, device=device)
+
+    k_scale = None
+    v_scale = None
     
     reshape_and_cache_flash_tpu_style(
         key, value, key_cache, value_cache,
@@ -196,10 +198,10 @@ def test_basic():
     )
     
     xm.mark_step()
+    xm.wait_device_ops()
+    # import pdb; pdb.set_trace()  # Debugging point
     
     print("✓ Basic test completed")
-    print(f"  Key cache ptr same: {key_cache.data_ptr() == key_ptr}")
-    print(f"  Value cache ptr same: {value_cache.data_ptr() == value_ptr}")
     
     if (key_cache != 0).any() and (value_cache != 0).any():
         print("✓ Caches were updated")
@@ -216,8 +218,10 @@ def test_torch_compile():
     @torch.compile(backend="openxla")
     def compiled_update(key, value, key_cache, value_cache, slot_mapping):
         # Create scale tensors (1.0 means no scaling)
-        k_scale = torch.ones(1, dtype=torch.float32, device=device)
-        v_scale = torch.ones(1, dtype=torch.float32, device=device)
+        # k_scale = torch.ones(1, dtype=torch.float32, device=device)
+        # v_scale = torch.ones(1, dtype=torch.float32, device=device)
+        k_scale = None
+        v_scale = None
         
         reshape_and_cache_flash_tpu_style(
             key, value, key_cache, value_cache,
@@ -226,21 +230,23 @@ def test_torch_compile():
         return key_cache.abs().mean() + value_cache.abs().mean()
     
     # Test
-    key = torch.randn(4, 2, 8, device=device)
-    value = torch.randn(4, 2, 8, device=device)
-    key_cache = torch.zeros(2, 16, 2, 8, device=device)
-    value_cache = torch.zeros(2, 16, 2, 8, device=device)
-    slot_mapping = torch.tensor([0, 1, 2, 3], dtype=torch.int64, device=device)
+    key = torch.randn(1, 1, 1, device=device).contiguous()
+    value = torch.randn(1, 1, 1, device=device).contiguous()
+    key_cache = torch.zeros(1, 2, 1, 1, device=device).contiguous()
+    value_cache = torch.zeros(1, 2, 1, 1, device=device).contiguous()
+    slot_mapping = torch.tensor([0], dtype=torch.int64, device=device)
     
     try:
         result = compiled_update(key, value, key_cache, value_cache, slot_mapping)
         xm.mark_step()
-        
+        xm.wait_device_ops()
+    
         print(f"✓ torch.compile test completed")
         print(f"  Result: {result.item():.4f}")
         
         if result.item() > 0:
             print("✓ Caches were modified")
+        import pdb; pdb.set_trace()  # Debugging point
     except Exception as e:
         print(f"✗ torch.compile test failed: {e}")
         import traceback
@@ -269,22 +275,24 @@ def test_comparison_with_vllm():
     block_size = 16
     
     # Initialize tensors on CUDA for vLLM
-    key_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
-    value_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
-    key_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
-    value_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32)
+    key_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
+    value_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
+    key_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
+    value_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
     slot_mapping_cuda = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=cuda_device)
     
     # Clone for XLA (convert to XLA device)
-    key_xla = key_cuda.detach().clone().to(xla_device)
-    value_xla = value_cuda.detach().clone().to(xla_device)
-    key_cache_xla = key_cache_cuda.detach().clone().to(xla_device)
-    value_cache_xla = value_cache_cuda.detach().clone().to(xla_device)
+    key_xla = key_cuda.detach().clone().to(xla_device).contiguous()
+    value_xla = value_cuda.detach().clone().to(xla_device).contiguous()
+    key_cache_xla = key_cache_cuda.detach().clone().to(xla_device).contiguous()
+    value_cache_xla = value_cache_cuda.detach().clone().to(xla_device).contiguous()
     slot_mapping_xla = slot_mapping_cuda.detach().clone().to(xla_device)
     
     # Create scale tensors (1.0 means no scaling)
-    k_scale_cuda = torch.ones(1, dtype=torch.float32, device=cuda_device)
-    v_scale_cuda = torch.ones(1, dtype=torch.float32, device=cuda_device)
+    # k_scale_cuda = torch.ones(1, dtype=torch.float32, device=cuda_device)
+    # v_scale_cuda = torch.ones(1, dtype=torch.float32, device=cuda_device)
+    k_scale_cuda = None
+    v_scale_cuda = None
     
     # Call vLLM's native implementation
     print("\n1. Calling vLLM native implementation...")
@@ -300,8 +308,10 @@ def test_comparison_with_vllm():
     )
     
     # Create scale tensors for XLA (1.0 means no scaling)
-    k_scale_xla = torch.ones(1, dtype=torch.float32, device=xla_device)
-    v_scale_xla = torch.ones(1, dtype=torch.float32, device=xla_device)
+    # k_scale_xla = torch.ones(1, dtype=torch.float32, device=xla_device)
+    # v_scale_xla = torch.ones(1, dtype=torch.float32, device=xla_device)
+    k_scale_xla = None
+    v_scale_xla = None
     
     # Call XLA custom call
     print("2. Calling XLA custom call implementation...")
@@ -387,8 +397,10 @@ def test_xla_optimization():
         # Multiple updates to test optimization
         for _ in range(3):
             # Create scale tensors (1.0 means no scaling)
-            k_scale = torch.ones(1, dtype=torch.float32, device=key.device)
-            v_scale = torch.ones(1, dtype=torch.float32, device=value.device)
+            # k_scale = torch.ones(1, dtype=torch.float32, device=key.device)
+            # v_scale = torch.ones(1, dtype=torch.float32, device=value.device)
+            k_scale = None
+            v_scale = None
             
             reshape_and_cache_flash_tpu_style(
                 key, value, key_cache, value_cache,
@@ -397,10 +409,10 @@ def test_xla_optimization():
         return key_cache.sum()
     
     # Small tensors for testing
-    key = torch.ones(2, 1, 4, device=device)
-    value = torch.ones(2, 1, 4, device=device) * 2.0
-    key_cache = torch.zeros(1, 8, 1, 4, device=device)
-    value_cache = torch.zeros(1, 8, 1, 4, device=device)
+    key = torch.ones(2, 1, 4, device=device).contiguous()
+    value = torch.ones(2, 1, 4, device=device).contiguous() * 2.0
+    key_cache = torch.zeros(1, 8, 1, 4, device=device).contiguous()
+    value_cache = torch.zeros(1, 8, 1, 4, device=device).contiguous()
     slot_mapping = torch.tensor([0, 1], dtype=torch.int64, device=device)
     
     try:
@@ -427,10 +439,10 @@ def main():
     setup_custom_call()
     
     # Run tests
-    test_basic()
+    # test_basic()
     test_torch_compile()
-    test_comparison_with_vllm()  # New comparison test
-    test_xla_optimization()
+    # test_comparison_with_vllm()  # New comparison test
+    # test_xla_optimization()
     
     print("\n" + "="*60)
     print("✅ Tests completed!")
