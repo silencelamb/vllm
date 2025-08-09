@@ -3,7 +3,7 @@
 echo "Compiling combined KV cache wrapper..."
 
 # Compile the combined KV wrapper
-nvcc -c -fPIC xla_combined_kv_wrapper.cu -o combined_kv_wrapper.o \
+nvcc -c -Xcompiler -fPIC xla_combined_kv_wrapper.cu -o combined_kv_wrapper.o \
     -gencode arch=compute_80,code=sm_80 \
     -gencode arch=compute_90,code=sm_90 \
     --expt-relaxed-constexpr

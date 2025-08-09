@@ -9,6 +9,7 @@ import ctypes
 import struct
 from torch.library import Library
 import numpy as np
+from torch_xla.experimental.custom_kernel import XLA_LIB
 
 # Try to import vLLM's reshape_and_cache_flash for comparison
 try:
@@ -111,14 +112,14 @@ def reshape_and_cache_flash_impl(
         {}
     )
     
-    # WORKAROUND: XLA custom call on GPU doesn't properly return the modified buffers
-    # The in-place modification happens correctly, but outputs are zeros
-    # So we return the original caches which have been modified in-place
-    return key_cache, value_cache
+    # This is important: XLA custom call returns the outputs in the same order as inputs
+    # So we need to extract the last 2 tensors as outputs
+    # return key_cache, value_cache
+    return outputs
 
 
 # Define the operation that returns new tensors
-xla_cache_lib.define(
+XLA_LIB.define(
     "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
     "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
     "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
@@ -126,7 +127,7 @@ xla_cache_lib.define(
 
 
 # Implementation for XLA
-xla_cache_lib.impl("reshape_and_cache_update_op", reshape_and_cache_flash_impl, "XLA")
+XLA_LIB.impl("reshape_and_cache_update_op", reshape_and_cache_flash_impl, "XLA")
 
 
 # Fake implementation for meta tensors
@@ -135,10 +136,10 @@ def reshape_and_cache_update_op_fake(
     kv_cache_dtype, k_scale, v_scale
 ):
     # Return tensors with same shape/dtype as caches
-    return key_cache.clone(), value_cache.clone()
+    return key_cache, value_cache
 
 # Register fake implementation for torch.compile
-xla_cache_lib._register_fake("reshape_and_cache_update_op", reshape_and_cache_update_op_fake)
+XLA_LIB._register_fake("reshape_and_cache_update_op", reshape_and_cache_update_op_fake)
 
 
 def reshape_and_cache_flash_tpu_style(
@@ -158,7 +159,7 @@ def reshape_and_cache_flash_tpu_style(
         torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
     
     # Get new caches
-    new_key_cache, new_value_cache = torch.ops.xla_cache.reshape_and_cache_update_op(
+    new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
         key, value, key_cache, value_cache,
         slot_mapping, kv_cache_dtype, k_scale, v_scale
     )
