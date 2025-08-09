@@ -42,7 +42,6 @@ inplace_lib = Library("xla_inplace", "DEF")
 # Define in-place operation
 inplace_lib.define("inplace_add(Tensor(a!) output, Tensor input) -> Tensor")
 
-@inplace_lib.impl("inplace_add", "XLA")
 def inplace_add_xla(output, input):
     """In-place add: output += input"""
     size = output.numel()
@@ -61,14 +60,17 @@ def inplace_add_xla(output, input):
     )[0]
     return result
 
-@inplace_lib.impl_abstract("inplace_add")
+# Register the implementation
+inplace_lib.impl("inplace_add", inplace_add_xla, "XLA")
+
 def inplace_add_abstract(output, input):
     return output
+
+inplace_lib.impl_abstract("inplace_add", inplace_add_abstract)
 
 # Define regular add for comparison
 inplace_lib.define("regular_add(Tensor a, Tensor b) -> Tensor")
 
-@inplace_lib.impl("regular_add", "XLA")
 def regular_add_xla(a, b):
     """Regular add: return a + b"""
     size = a.numel()
@@ -86,9 +88,13 @@ def regular_add_xla(a, b):
     )[0]
     return result
 
-@inplace_lib.impl_abstract("regular_add")
+# Register regular add implementation
+inplace_lib.impl("regular_add", regular_add_xla, "XLA")
+
 def regular_add_abstract(a, b):
     return torch.empty_like(a)
+
+inplace_lib.impl_abstract("regular_add", regular_add_abstract)
 
 
 def test_without_compile():
