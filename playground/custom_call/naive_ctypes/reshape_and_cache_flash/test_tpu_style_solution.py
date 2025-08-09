@@ -317,8 +317,16 @@ def test_comparison_with_vllm():
     torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
     torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
     new_key_cache, new_value_cache = compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
+    
+    # Force evaluation first
+    xm.mark_step()
+    xm.wait_device_ops()
+    
+    # Now copy the materialized results
     value_cache_xla.copy_(new_value_cache)
     key_cache_xla.copy_(new_key_cache)
+    
+    # Mark step again after copy
     xm.mark_step()
     xm.wait_device_ops()
     
