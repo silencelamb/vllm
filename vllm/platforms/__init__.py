@@ -91,7 +91,7 @@ def cuda_platform_plugin() -> Optional[str]:
             is_cuda = True
         else:
             logger.debug("CUDA platform is not available because: %s", str(e))
-    
+    import os
     if os.environ.get("VLLM_USE_XLA_GPU", "0").lower() in ("1", "true", "yes"):
         logger.debug("VLLM_USE_XLA_GPU is set,  USE XLA GPU platform.")
         is_cuda = False

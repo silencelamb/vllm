@@ -379,7 +379,7 @@ def main():
     
     # Run tests
     test_torch_compile()
-    # test_comparison_with_vllm()  # New comparison test
+    test_comparison_with_vllm()  # New comparison test
     
     print("\n" + "="*60)
     print("✅ Tests completed!")
