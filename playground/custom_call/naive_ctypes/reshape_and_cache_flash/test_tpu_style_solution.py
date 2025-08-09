@@ -150,7 +150,7 @@ def reshape_and_cache_flash_tpu_style(
     kv_cache_dtype: str = "auto",
     k_scale: torch.Tensor = None,
     v_scale: torch.Tensor = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> None:
     """TPU-style wrapper that uses buffer donor optimization."""
     # Mark caches as buffer donors (if XLA supports it)
     if hasattr(torch.ops.xla, 'dynamo_set_buffer_donor_'):
@@ -168,9 +168,6 @@ def reshape_and_cache_flash_tpu_style(
     # this copy is essentially a no-op but maintains compatibility with TPU pattern
     key_cache.copy_(new_key_cache)
     value_cache.copy_(new_value_cache)
-    
-    # Return the caches for use in torch.compile
-    return key_cache, value_cache
 
 def test_basic():
     """Test basic functionality."""
@@ -198,7 +195,7 @@ def test_basic():
     k_scale = None
     v_scale = None
     
-    _, _ = reshape_and_cache_flash_tpu_style(
+    reshape_and_cache_flash_tpu_style(
         key, value, key_cache, value_cache,
         slot_mapping, "auto", k_scale, v_scale
     )
@@ -229,11 +226,11 @@ def test_torch_compile():
         k_scale = None
         v_scale = None
         
-        updated_key_cache, updated_value_cache = reshape_and_cache_flash_tpu_style(
+        reshape_and_cache_flash_tpu_style(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
-        return updated_key_cache.abs().mean() + updated_value_cache.abs().mean()
+        return key_cache.abs().mean() + value_cache.abs().mean()
     
     # Test
     key = torch.randn(1, 1, 1, device=device).contiguous()
@@ -325,7 +322,7 @@ def test_comparison_with_vllm():
     # Debug: Check cache before operation
     print(f"   Before XLA call - key_cache_xla sum: {key_cache_xla.sum().item()}")
     
-    _, _ = reshape_and_cache_flash_tpu_style(
+    reshape_and_cache_flash_tpu_style(
         key_xla,
         value_xla,
         key_cache_xla,
@@ -408,7 +405,7 @@ def test_xla_optimization():
             k_scale = None
             v_scale = None
             
-            _, _ = reshape_and_cache_flash_tpu_style(
+            reshape_and_cache_flash_tpu_style(
                 key, value, key_cache, value_cache,
                 slot_mapping, "auto", k_scale, v_scale
             )
