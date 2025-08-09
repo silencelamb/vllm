@@ -120,9 +120,9 @@ def reshape_and_cache_flash_impl(
 
 # Define the operation that returns new tensors
 XLA_LIB.define(
-    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
-    "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-    "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
+    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
+    "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
+    "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
 )
 
 
