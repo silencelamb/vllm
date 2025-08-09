@@ -273,7 +273,6 @@ def test_comparison_with_vllm():
     print("2. Calling XLA custom call implementation...")
     
     # Debug: Check cache before operation
-    print(f"   Before XLA call - key_cache_xla sum: {key_cache_xla.sum().item()}")
     
     # torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
     # torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
