@@ -10,6 +10,7 @@ import struct
 from torch.library import Library
 import numpy as np
 from torch_xla.experimental.custom_kernel import XLA_LIB
+from torch.library import register_fake
 
 # Try to import vLLM's reshape_and_cache_flash for comparison
 try:
@@ -119,10 +120,16 @@ def reshape_and_cache_flash_impl(
 
 
 # Define the operation that returns new tensors
+# XLA_LIB.define(
+#     "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
+#     "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
+#     "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
+# )
+
 XLA_LIB.define(
-    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
-    "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-    "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
+    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
+    "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
+    "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
 )
 
 
@@ -131,15 +138,18 @@ XLA_LIB.impl("reshape_and_cache_update_op", reshape_and_cache_flash_impl, "XLA")
 
 
 # Fake implementation for meta tensors
+@register_fake("xla::reshape_and_cache_update_op")
 def reshape_and_cache_update_op_fake(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
 ):
-    # Return tensors with same shape/dtype as caches
-    return key_cache, value_cache
-
-# Register fake implementation for torch.compile
-XLA_LIB._register_fake("reshape_and_cache_update_op", reshape_and_cache_update_op_fake)
+    out_k = torch.empty_strided(
+        key_cache.shape, key_cache.stride(), dtype=key_cache.dtype, device="meta"
+    )
+    out_v = torch.empty_strided(
+        value_cache.shape, value_cache.stride(), dtype=value_cache.dtype, device="meta"
+    )
+    return out_k, out_v
 
 
 def reshape_and_cache_flash_tpu_style(
