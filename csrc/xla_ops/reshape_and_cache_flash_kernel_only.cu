@@ -35,11 +35,11 @@ __global__ void reshape_and_cache_flash_kernel(
   const int64_t token_idx = blockIdx.x;
   const int64_t slot_idx = slot_mapping[token_idx];
 
-  if (blockIdx.x == 0 && threadIdx.x == 0) {
-    for (int64_t i = 0; i < 4; ++i) {
-      printf("slot[%ld] = %ld\n", i, slot_mapping[i]);
-    }
-  }
+  // if (blockIdx.x == 0 && threadIdx.x == 0) {
+  //   for (int64_t i = 0; i < 4; ++i) {
+  //     printf("slot[%ld] = %ld\n", i, slot_mapping[i]);
+  //   }
+  // }
   // NOTE: slot_idx can be -1 if the token is padded
   if (slot_idx < 0) {
     return;
@@ -57,12 +57,13 @@ __global__ void reshape_and_cache_flash_kernel(
                                       head_idx * head_stride + head_offset;
     scalar_t tgt_key = key[src_key_idx];
     scalar_t tgt_value = value[src_value_idx];
-    printf("blockIdx.x: %d, threadIdx.x: %d\n", blockIdx.x, threadIdx.x);
-    printf(
-        "block_idx: %ld, block_offset: %ld, head_idx: %d, "
-        "head_offset: %d, tgt_key_value_idx: %ld, tgt_key: %f, tgt_value: %f\n",
-        block_idx, block_offset, head_idx, head_offset, tgt_key_value_idx,
-        static_cast<float>(tgt_key), static_cast<float>(tgt_value));
+    // printf("blockIdx.x: %d, threadIdx.x: %d\n", blockIdx.x, threadIdx.x);
+    // printf(
+    //     "block_idx: %ld, block_offset: %ld, head_idx: %d, "
+    //     "head_offset: %d, tgt_key_value_idx: %ld, tgt_key: %f, tgt_value:
+    //     %f\n", block_idx, block_offset, head_idx, head_offset,
+    //     tgt_key_value_idx, static_cast<float>(tgt_key),
+    //     static_cast<float>(tgt_value));
 
     // For kAuto mode, no fp8 conversion
     if (kv_dt == Fp8KVCacheDataType::kAuto) {
@@ -83,7 +84,7 @@ __global__ void reshape_and_cache_flash_kernel(
         value_cache[tgt_key_value_idx] = cache_t(value_float);
       } else {
         // No scaling, direct copy
-        printf("No scaling applied, copying directly.\n");
+        // printf("No scaling applied, copying directly.\n");
         key_cache[tgt_key_value_idx] = cache_t(tgt_key);
         value_cache[tgt_key_value_idx] = cache_t(tgt_value);
       }
