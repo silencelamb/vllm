@@ -164,61 +164,21 @@ def reshape_and_cache_flash_tpu_style(
 ) -> None:
     """TPU-style wrapper that uses buffer donor optimization."""
     # Mark caches as buffer donors (if XLA supports it)
-    if hasattr(torch.ops.xla, 'dynamo_set_buffer_donor_'):
-        torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-        torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+    torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+    torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
     
     # Get new caches
     new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
         key, value, key_cache, value_cache,
         slot_mapping, kv_cache_dtype, k_scale, v_scale
     )
-    
+    # print(key_cache, value_cache)
     # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
     # Since our custom op returns the modified caches (workaround for XLA GPU issue),
     # this copy is essentially a no-op but maintains compatibility with TPU pattern
     key_cache.copy_(new_key_cache)
     value_cache.copy_(new_value_cache)
-
-def test_basic():
-    """Test basic functionality."""
-    print("\n" + "="*60)
-    print("Testing TPU-style basic functionality")
-    print("="*60)
-    
-    device = xm.xla_device()
-    
-    key = torch.randn(4, 2, 8, device=device).contiguous()
-    value = torch.randn(4, 2, 8, device=device).contiguous()
-    key_cache = torch.zeros(2, 16, 2, 8, device=device).contiguous()
-    value_cache = torch.zeros(2, 16, 2, 8, device=device).contiguous()
-    slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device)
-    
-    # Store pointers
-    key_ptr = key_cache.data_ptr()
-    value_ptr = value_cache.data_ptr()
-    
-    # Call TPU-style
-    # # Create scale tensors (1.0 means no scaling)
-    # k_scale = torch.ones(1, dtype=torch.float32, device=device)
-    # v_scale = torch.ones(1, dtype=torch.float32, device=device)
-
-    k_scale = None
-    v_scale = None
-    
-    reshape_and_cache_flash_tpu_style(
-        key, value, key_cache, value_cache,
-        slot_mapping, "auto", k_scale, v_scale
-    )
-    
-    xm.mark_step()
-    xm.wait_device_ops()
-    # import pdb; pdb.set_trace()  # Debugging point
-    
-    print("✓ Basic test completed")
-    
-    if (key_cache != 0).any() and (value_cache != 0).any():
-        print("✓ Caches were updated")
+    return key_cache, value_cache
 
 
 def test_torch_compile():
@@ -237,11 +197,18 @@ def test_torch_compile():
         k_scale = None
         v_scale = None
         
-        reshape_and_cache_flash_tpu_style(
+        # Get new caches
+        new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
-        return key_cache.abs().mean() + value_cache.abs().mean()
+        # print(key_cache, value_cache)
+        # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
+        # Since our custom op returns the modified caches (workaround for XLA GPU issue),
+        # this copy is essentially a no-op but maintains compatibility with TPU pattern
+        # return new_key_cache, new_value_cache
+        # return key_cache, new_value_cache
+        return new_key_cache, new_value_cache
     
     # Test
     key = torch.randn(1, 1, 1, device=device).contiguous()
@@ -251,16 +218,20 @@ def test_torch_compile():
     slot_mapping = torch.tensor([0], dtype=torch.int64, device=device)
     
     try:
-        result = compiled_update(key, value, key_cache, value_cache, slot_mapping)
+        # 关键点： donate和copy_ 都在compile之外
+        torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+        torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+        new_key_cache, new_value_cache = compiled_update(key, value, key_cache, value_cache, slot_mapping)
+        new_value_cache.copy_(value_cache)
+        new_key_cache.copy_(key_cache)
         xm.mark_step()
         xm.wait_device_ops()
-    
-        print(f"✓ torch.compile test completed")
-        print(f"  Result: {result.item():.4f}")
         
-        if result.item() > 0:
-            print("✓ Caches were modified")
-        import pdb; pdb.set_trace()  # Debugging point
+        import pdb; pdb.set_trace()
+        print(f"new_key_cache: {new_key_cache}, new_value_cache: {new_value_cache}")
+        print(f"key_cache: {key_cache}, value_cache: {value_cache}")
+        print(f"✓ torch.compile test completed")
+        
     except Exception as e:
         print(f"✗ torch.compile test failed: {e}")
         import traceback
@@ -394,52 +365,6 @@ def test_comparison_with_vllm():
     print(f"  Value cache: {value_nonzero}/{value_cache_xla_cpu.numel()}")
 
 
-def test_xla_optimization():
-    """Test to verify XLA optimization behavior."""
-    print("\n" + "="*60)
-    print("Testing XLA optimization behavior")
-    print("="*60)
-    
-    device = xm.xla_device()
-    
-    # Enable XLA graph dump if available
-    os.environ["XLA_SAVE_TENSORS_FILE"] = "/tmp/xla_tensors.txt"
-    os.environ["XLA_SAVE_TENSORS_FMT"] = "text"
-    
-    @torch.compile(backend="openxla", fullgraph=True)
-    def optimized_fn(key, value, key_cache, value_cache, slot_mapping):
-        # Multiple updates to test optimization
-        for _ in range(3):
-            # Create scale tensors (1.0 means no scaling)
-            # k_scale = torch.ones(1, dtype=torch.float32, device=key.device)
-            # v_scale = torch.ones(1, dtype=torch.float32, device=value.device)
-            k_scale = None
-            v_scale = None
-            
-            reshape_and_cache_flash_tpu_style(
-                key, value, key_cache, value_cache,
-                slot_mapping, "auto", k_scale, v_scale
-            )
-        return key_cache.sum()
-    
-    # Small tensors for testing
-    key = torch.ones(2, 1, 4, device=device).contiguous()
-    value = torch.ones(2, 1, 4, device=device).contiguous() * 2.0
-    key_cache = torch.zeros(1, 8, 1, 4, device=device).contiguous()
-    value_cache = torch.zeros(1, 8, 1, 4, device=device).contiguous()
-    slot_mapping = torch.tensor([0, 1], dtype=torch.int64, device=device)
-    
-    try:
-        result = optimized_fn(key, value, key_cache, value_cache, slot_mapping)
-        xm.mark_step()
-        
-        print(f"✓ XLA optimization test completed")
-        print(f"  Result: {result.item():.4f}")
-        print("\n  Check XLA graph in /tmp/xla_tensors.txt to verify optimization")
-    except Exception as e:
-        print(f"⚠ Fullgraph compilation might not be supported: {e}")
-
-
 def main():
     print("="*60)
     print("TPU-style solution for reshape_and_cache_flash")
@@ -453,10 +378,8 @@ def main():
     setup_custom_call()
     
     # Run tests
-    # test_basic()
     test_torch_compile()
     # test_comparison_with_vllm()  # New comparison test
-    # test_xla_optimization()
     
     print("\n" + "="*60)
     print("✅ Tests completed!")

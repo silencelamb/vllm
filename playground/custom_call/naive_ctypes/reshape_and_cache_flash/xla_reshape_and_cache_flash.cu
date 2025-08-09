@@ -97,18 +97,25 @@ void reshape_and_cache_flash_xla_custom_call(cudaStream_t stream,
   }
 
   // Output buffers are at the end, after all input buffers including scales
-  // For in-place operations, these should be the same as the input cache buffers
+  // For in-place operations, these should be the same as the input cache
+  // buffers
   int output_buffer_start = scale_buffer_idx;
-  void* key_cache_buffer = buffers[output_buffer_start];      // output key_cache (should be same as buffers[2])
-  void* value_cache_buffer = buffers[output_buffer_start + 1];  // output value_cache (should be same as buffers[3])
-  
+  void* key_cache_buffer =
+      buffers[output_buffer_start];  // output key_cache (should be same as
+                                     // buffers[2])
+  void* value_cache_buffer =
+      buffers[output_buffer_start +
+              1];  // output value_cache (should be same as buffers[3])
+
   // Verify that output buffers match input cache buffers for in-place operation
   if (key_cache_buffer != buffers[2] || value_cache_buffer != buffers[3]) {
     printf("WARNING: Output buffers don't match input cache buffers!\n");
     printf("  Input key_cache (buffers[2]): %p\n", buffers[2]);
     printf("  Input value_cache (buffers[3]): %p\n", buffers[3]);
-    printf("  Output key_cache (buffers[%d]): %p\n", output_buffer_start, key_cache_buffer);
-    printf("  Output value_cache (buffers[%d]): %p\n", output_buffer_start + 1, value_cache_buffer);
+    printf("  Output key_cache (buffers[%d]): %p\n", output_buffer_start,
+           key_cache_buffer);
+    printf("  Output value_cache (buffers[%d]): %p\n", output_buffer_start + 1,
+           value_cache_buffer);
   }
 
   for (int i = 0; i < num_input_buffers; ++i) {
@@ -147,11 +154,12 @@ void reshape_and_cache_flash_xla_custom_call(cudaStream_t stream,
           page_stride, head_stride, key_stride, value_stride,
           descriptor.num_kv_heads, descriptor.head_size, descriptor.block_size,
           k_scale_buffer, v_scale_buffer);
-  
+
   // Ensure kernel completes before returning
   cudaError_t err = cudaStreamSynchronize(stream);
   if (err != cudaSuccess) {
-    printf("CUDA error in reshape_and_cache_flash: %s\n", cudaGetErrorString(err));
+    printf("CUDA error in reshape_and_cache_flash: %s\n",
+           cudaGetErrorString(err));
   }
 }
 
