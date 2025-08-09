@@ -109,7 +109,7 @@ def reshape_and_cache_flash_impl(
         [key_cache.dtype, value_cache.dtype],
         True,  # has_side_effect - this operation modifies the cache buffers
         descriptor,
-        1,  # api_version
+        2,  # api_version
         {}
     )
     
@@ -161,6 +161,8 @@ def test_torch_compile():
     
     @torch.compile(backend="openxla")
     def compiled_update(key, value, key_cache, value_cache, slot_mapping):
+        # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+        # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
         # Create scale tensors (1.0 means no scaling)
         # k_scale = torch.ones(1, dtype=torch.float32, device=device)
         # v_scale = torch.ones(1, dtype=torch.float32, device=device)
@@ -176,9 +178,15 @@ def test_torch_compile():
         # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
         # Since our custom op returns the modified caches (workaround for XLA GPU issue),
         # this copy is essentially a no-op but maintains compatibility with TPU pattern
-        # return new_key_cache, new_value_cache
-        # return key_cache, new_value_cache
+
+        # new_value_cache.copy_(value_cache)
+        # new_key_cache.copy_(key_cache)
+        
+        # value_cache.copy_(new_value_cache)
+        # key_cache.copy_(new_key_cache)
+
         return new_key_cache, new_value_cache
+        # return key_cache, value_cache
     
     # Test
     key = torch.randn(1, 1, 1, device=device).contiguous()
@@ -188,12 +196,16 @@ def test_torch_compile():
     slot_mapping = torch.tensor([0], dtype=torch.int64, device=device)
     
     try:
-        # 关键点： donate和copy_ 都在compile之外
-        torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-        torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+        # 关键点： donate和copy_ 都在compile之外  或者 都不加
+        # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+        # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
         new_key_cache, new_value_cache = compiled_update(key, value, key_cache, value_cache, slot_mapping)
-        value_cache.copy_(new_value_cache)
-        key_cache.copy_(new_key_cache)
+        # value_cache.copy_(new_value_cache)
+        # key_cache.copy_(new_key_cache)
+
+        # new_value_cache.copy_(value_cache)
+        # new_key_cache.copy_(key_cache)
+        
         xm.mark_step()
         xm.wait_device_ops()
         
@@ -297,6 +309,8 @@ def test_comparison_with_vllm():
         # Create scale tensors (1.0 means no scaling)
         # k_scale = torch.ones(1, dtype=torch.float32, device=device)
         # v_scale = torch.ones(1, dtype=torch.float32, device=device)
+        # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+        # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
         k_scale = None
         v_scale = None
         
@@ -305,26 +319,28 @@ def test_comparison_with_vllm():
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
-        # print(key_cache, value_cache)
-        # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
-        # Since our custom op returns the modified caches (workaround for XLA GPU issue),
-        # this copy is essentially a no-op but maintains compatibility with TPU pattern
-        # return new_key_cache, new_value_cache
-        # return key_cache, new_value_cache
+
+        # value_cache.copy_(new_value_cache)
+        # key_cache.copy_(new_key_cache)
+        
+        # new_value_cache.copy_(value_cache)
+        # new_key_cache.copy_(key_cache)
+
+        # return key_cache, value_cache
         return new_key_cache, new_value_cache
     
-    # 关键点： donate和copy_ 都在compile之外
-    torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
-    torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
+    # 关键点： donate和copy_ 都在compile之外 或者 都不加
+    # torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
+    # torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
     new_key_cache, new_value_cache = compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
     
-    # Force evaluation first
-    xm.mark_step()
-    xm.wait_device_ops()
-    
     # Now copy the materialized results
-    value_cache_xla.copy_(new_value_cache)
-    key_cache_xla.copy_(new_key_cache)
+    # value_cache_xla.copy_(new_value_cache)
+    # key_cache_xla.copy_(new_key_cache)
+    
+    # new_value_cache.copy_(value_cache_xla)
+    # new_key_cache.copy_(key_cache_xla)
+    
     
     # Mark step again after copy
     xm.mark_step()
@@ -332,7 +348,6 @@ def test_comparison_with_vllm():
     
     # Compare results
     print("\n3. Comparing results...")
-    # import pdb; pdb.set_trace()
     # Move XLA results back to CPU for comparison
     key_cache_xla_cpu = key_cache_xla.cpu()
     value_cache_xla_cpu = value_cache_xla.cpu()
