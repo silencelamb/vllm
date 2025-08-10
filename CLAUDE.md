@@ -68,11 +68,7 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
 
 后续工作包括：
 
-1. 利用新增custom os的手段，新增flash_attn_varlen_func 和 reshape_and_cache_flash的custom call算子。可以先从单个的算子封装和测试开始，确保它们可以在XLA GPU上正确执行。
-   - 需要在`@vllm/v1/attention/backends/xla_gpu_native.py`中实现这两个算子的custom call注册。
-   - 可以参考`@playground/custom_call/naive_ctypes/rms_norm/test_rms_norm_minimal.py`中的实现。
-   - 需要在`@vllm/v1/worker/xla_gpu_model_runner.py`中实现对接逻辑，确保算子能够正确处理输入和输出。
-2. @vllm/v1/worker/xla_gpu_model_runner.py需要完全跟这个算子对接，主要是_prepare_inputs对接好这个算子。可以参考@vllm/v1/worker/gpu_model_runner.py的_prepare_inputs方法。另外，需要确保在XlaGpuWorker中正确处理请求，以便与PagedAttention算子兼容。
+1. 利
 
 ## 规范说明
 
