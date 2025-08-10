@@ -4,7 +4,7 @@ This is a complete implementation that registers `reshape_and_cache_flash` as an
 
 ## Architecture
 
-### 1. C++ Wrapper (`reshape_and_cache_flash_wrapper.cc`)
+### 1. C++ Wrapper (`reshape_and_cache_xla_pure.cc`)
 - Wraps the existing `reshape_and_cache_flash` function from `csrc/cache_kernels.cu`
 - Implements the XLA custom call interface
 - Returns new tensors (TPU-style) to avoid aliasing issues
@@ -25,11 +25,10 @@ This is a complete implementation that registers `reshape_and_cache_flash` as an
 
 ```bash
 # Run the compile script
-./compile_xla.sh
+./compile_xla_vllm_style.sh
 
 # This will create:
 # - reshape_and_cache_xla.so: XLA custom call shared library
-# - reshape_and_cache_xla_ext*.so: Python extension module
 ```
 
 ## Usage
@@ -105,10 +104,10 @@ The opaque descriptor passed to XLA contains:
 ### Buffer Layout
 
 XLA custom call buffers:
-- `[0]` key_cache (input/output)
-- `[1]` value_cache (input/output)
-- `[2]` key (input)
-- `[3]` value (input)
+- `[0]` key (input)
+- `[1]` value (input)
+- `[2]` key_cache (input/output)
+- `[3]` value_cache (input/output)
 - `[4]` slot_mapping (input)
 - `[5]` k_scale (optional input)
 - `[6]` v_scale (optional input)

@@ -313,7 +313,7 @@ def test_comparison_with_vllm():
     # 关键点： donate和copy_ 都在compile之外 或者 都不加
     # torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
     # torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
-    new_key_cache, new_value_cache = compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
+    compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
     
     # Now copy the materialized results
     # value_cache_xla.copy_(new_value_cache)
