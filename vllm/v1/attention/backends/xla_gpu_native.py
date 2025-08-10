@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple, Union
 import os
+import sys
 import ctypes
 
 import torch
@@ -18,6 +19,53 @@ from vllm.logger import init_logger
 
 logger = init_logger(__name__)
 
+# Import XLA custom ops from playground
+def import_xla_custom_ops():
+    """Import and setup XLA custom ops for flash attention and reshape_and_cache"""
+    import importlib.util
+    import pathlib
+    
+    # Get the vLLM root directory
+    vllm_root = pathlib.Path(__file__).parent.parent.parent.parent.parent
+    
+    # Import flash attention XLA custom op
+    flash_attn_path = vllm_root / "playground" / "custom_call" / "flash-attn" / "test_flash_attn_xla.py"
+    spec = importlib.util.spec_from_file_location("flash_attn_xla", flash_attn_path)
+    flash_attn_module = importlib.util.module_from_spec(spec)
+    sys.modules["flash_attn_xla"] = flash_attn_module
+    
+    # Setup flash attention custom call
+    os.chdir(flash_attn_path.parent)
+    spec.loader.exec_module(flash_attn_module)
+    flash_attn_module.setup_custom_call()
+    
+    # Import reshape_and_cache XLA custom op
+    reshape_cache_path = vllm_root / "playground" / "custom_call" / "ctypes_reuse_kernel" / "reshape_and_cache_flash" / "xla_reshape_and_cache.py"
+    spec = importlib.util.spec_from_file_location("xla_reshape_and_cache", reshape_cache_path)
+    reshape_cache_module = importlib.util.module_from_spec(spec)
+    sys.modules["xla_reshape_and_cache"] = reshape_cache_module
+    
+    # Setup reshape_and_cache custom call
+    os.chdir(reshape_cache_path.parent)
+    spec.loader.exec_module(reshape_cache_module)
+    reshape_cache_module.setup_custom_call()
+    
+    logger.info("XLA custom ops for flash attention and reshape_and_cache have been imported and registered")
+    
+    return flash_attn_module, reshape_cache_module
+
+# Try to import and setup XLA custom ops
+XLA_CUSTOM_OPS_AVAILABLE = False
+try:
+    if xm.is_xla_tensor(torch.zeros(1)):
+        flash_attn_xla, xla_reshape_and_cache = import_xla_custom_ops()
+        XLA_CUSTOM_OPS_AVAILABLE = True
+        logger.info("XLA custom ops successfully loaded")
+except Exception as e:
+    logger.warning(f"Failed to load XLA custom ops: {e}")
+    flash_attn_xla = None
+    xla_reshape_and_cache = None
+
 # Try to import flash attention functions
 try:
     from vllm import _custom_ops as ops
@@ -29,12 +77,54 @@ try:
     from vllm.vllm_flash_attn import (flash_attn_varlen_func as _flash_attn_varlen_func_orig,
                                       get_scheduler_metadata)
     
-    # Keep the original functions accessible
-    reshape_and_cache_flash = _reshape_and_cache_flash_orig
-    flash_attn_varlen_func = _flash_attn_varlen_func_orig
+    # Use XLA custom ops if available, otherwise fall back to original
+    if XLA_CUSTOM_OPS_AVAILABLE:
+        def reshape_and_cache_flash(key, value, key_cache, value_cache, 
+                                   slot_mapping, kv_cache_dtype, k_scale, v_scale):
+            """Use XLA custom op for reshape_and_cache_flash"""
+            # XLA custom op returns new tensors, but vLLM expects in-place update
+            new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_flash(
+                key, value, key_cache, value_cache,
+                slot_mapping, kv_cache_dtype, k_scale, v_scale
+            )
+            # Copy back to original tensors for in-place update
+            key_cache.copy_(new_key_cache)
+            value_cache.copy_(new_value_cache)
+        
+        def flash_attn_varlen_func(q, k, v, out, cu_seqlens_q, max_seqlen_q,
+                                 seqused_k, max_seqlen_k, softmax_scale,
+                                 causal=True, block_table=None, 
+                                 scheduler_metadata=None):
+            """Use XLA custom op for flash attention"""
+            # Convert cu_seqlens_q to cu_seqlens_k if needed
+            # For prefill, cu_seqlens_k should be same as cu_seqlens_q
+            cu_seqlens_k = cu_seqlens_q
+            
+            # Call XLA custom op
+            attn_out, softmax_lse = torch.ops.xla.flash_attn_varlen_op(
+                q, k, v,
+                cu_seqlens_q, cu_seqlens_k,
+                max_seqlen_q, max_seqlen_k,
+                softmax_scale,
+                causal,  # is_causal
+                -1, -1,  # window_size (left, right)
+                0.0,     # softcap
+                seqused_k,   # seqused_k
+                block_table  # block_table
+            )
+            
+            # Copy result to output tensor
+            out.copy_(attn_out)
+            return out
+        
+        logger.info("Using XLA custom ops for Flash Attention")
+    else:
+        # Keep the original functions accessible
+        reshape_and_cache_flash = _reshape_and_cache_flash_orig
+        flash_attn_varlen_func = _flash_attn_varlen_func_orig
+        logger.info("Using original Flash Attention implementation")
     
     FLASH_ATTN_AVAILABLE = True
-    logger.info("Flash Attention available, using optimized implementation")
     
     # Now register custom ops for XLA GPU to handle fake tensors properly
     # These wrap the Flash Attention functions with fake implementations for torch.compile
@@ -450,8 +540,8 @@ def xla_gpu_kv_cache_update(
         v_scale: Optional value scale factor
     """
     if FLASH_ATTN_AVAILABLE:
-        # Use our registered custom op that handles fake tensors properly
-        torch.ops.vllm.xla_reshape_and_cache_flash(
+        # Use the function we defined above (either XLA custom op or original)
+        reshape_and_cache_flash(
             key, value, key_cache, value_cache,
             slot_mapping, kv_cache_dtype, k_scale, v_scale
         )
@@ -496,15 +586,14 @@ def xla_gpu_paged_attention_final(
     num_actual_tokens = attn_metadata.num_actual_tokens
     
     if FLASH_ATTN_AVAILABLE and num_actual_tokens > 0:
-        # Use Flash Attention via our registered custom op
+        # Use Flash Attention (either XLA custom op or original)
         try:
             # Use the correct field names from XlaGpuPagedMetadata
             seq_lens_to_use = attn_metadata.seq_lens_tensor if attn_metadata.seq_lens_tensor is not None else attn_metadata.seq_lens
             block_table_to_use = attn_metadata.block_tables if attn_metadata.block_tables is not None else attn_metadata.block_table
             
-            # Call our registered custom op which handles fake tensors properly
-            # Flash Attention modifies output in-place
-            torch.ops.vllm.xla_flash_attn_varlen_func(
+            # Call the flash attention function (either XLA custom op or original)
+            flash_attn_varlen_func(
                 query[:num_actual_tokens],  # q
                 key_cache,  # k
                 value_cache,  # v

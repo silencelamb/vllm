@@ -61,14 +61,15 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
             )
 - @vllm/platforms/xla_gpu.py: 实现新增XLA GPU平台
 - @tests/xla_gpu/test_compilation.py: 测试用例，测试XLA GPU编译和执行
-- @playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/compile_xla_vllm_style.sh 是编译so的脚本，@playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/test_tpu_style_solution.py 是使用torch xla以及torch.compile调用和测试的脚本，结果与vLLM直接调用reshape_and_cache_flash是一致的
+- @playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/compile_xla_vllm_style.sh 是编译so的脚本，@playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/test_xla_reshape_and_cache.py 是使用torch xla以及torch.compile调用和测试的脚本，@playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/xla_reshape_and_cache.py的reshape_and_cache_flash函数执行的结果与vLLM直接调用reshape_and_cache_flash是一致的
 - @playground/custom_call/flash-attn/compile_flash_attn_xla.sh  是编译so的脚本，@playground/custom_call/flash-attn/test_flash_attn_xla.py 是使用torch xla以及torch.compile调用和测试的脚本，实现的torch.ops.xla.flash_attn_varlen_op 结果与flash_attn_varlen_func是一致的
 
 ## 后续工作
 
 后续工作包括：
 
-1. @vllm/v1/attention/backends/xla_gpu_native.py 里的flash_attn_varlen_func 换成调用 torch.ops.xla.flash_attn_varlen_op，reshape_and_cache_flash换成torch.ops.xla.reshape_and_cache_update_op的调用
+1. @vllm/v1/attention/backends/xla_gpu_native.py 里的flash_attn_varlen_func 换成调用 @playground/custom_call/flash-attn/test_flash_attn_xla.py里torch.ops.xla.flash_attn_varlen_op，reshape_and_cache_flash换成@playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/xla_reshape_and_cache.py的reshape_and_cache_flash
+2. 修改 @vllm/v1/worker/xla_gpu_model_runner.py: 保证正确执行，结果正确，可能要参考 @vllm/v1/worker/gpu_model_runner.py 是怎么_prepare_inputs写的，调用attention时的一些变量是如何准备和维护的
 
 ## 规范说明
 
