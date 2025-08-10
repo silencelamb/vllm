@@ -207,7 +207,7 @@ def flash_attn_varlen_op_fake(
 
 
 def flash_attn_varlen_func_xla(
-    q, k_cache, v_cache, cu_seqlens_q, cu_seqlens_k, seqused_k, block_table
+    q, k_cache, v_cache, cu_seqlens_q, cu_seqlens_k, seqlen_q, seqlen_k, softmax_scale, seqused_k, block_table
 ):
     return torch.ops.xla.flash_attn_varlen_op(
         q,
@@ -279,10 +279,6 @@ def test_simple():
             seqlen_q,
             seqlen_k,
             softmax_scale,
-            True,  # is_causal
-            -1,
-            -1,  # window_size
-            0.0,  # softcap
             None,  # seqused_k
             None,  # block_table
         )
@@ -333,13 +329,9 @@ def test_torch_compile():
             v,
             cu_seqlens_q,
             cu_seqlens_k,
-            max_seqlen_q,
-            max_seqlen_k,
+            seqlen,
+            seqlen,
             softmax_scale,
-            True,  # is_causal
-            -1,
-            -1,  # window_size
-            0.0,  # softcap
             None,  # seqused_k
             None,  # block_table
         )
@@ -433,18 +425,14 @@ def test_comparison_with_vllm():
 
     compiled_flash_attn = torch.compile(flash_attn_varlen_func_xla, backend="openxla")
     out_xla, lse_xla = compiled_flash_attn(
-        q,
-        k,
-        v,
-        cu_seqlens_q,
-        cu_seqlens_k,
+        q_xla,
+        k_xla,
+        v_xla,
+        cu_seqlens_q_xla,
+        cu_seqlens_k_xla,
         seqlen_q,
         seqlen_k,
         softmax_scale,
-        True,  # is_causal
-        -1,
-        -1,  # window_size
-        0.0,  # softcap
         None,  # seqused_k
         None,  # block_table
     )
@@ -620,21 +608,17 @@ def test_with_block_table():
         compiled_flash_attn = torch.compile(
             flash_attn_varlen_func_xla, backend="openxla"
         )
-        out, softmax_lse = compiled_flash_attn(
-            q,
-            k,
-            v,
-            cu_seqlens_q,
-            cu_seqlens_k,
-            max_seqlen_q,
-            max_seqlen_k,
+        out_xla, softmax_lse = compiled_flash_attn(
+            q_xla,
+            k_cache_xla,
+            v_cache_xla,
+            cu_seqlens_q_xla,
+            cu_seqlens_k_xla,
+            seqlen_q,
+            seqlen_k,
             softmax_scale,
-            True,  # is_causal
-            -1,
-            -1,  # window_size
-            0.0,  # softcap
-            None,  # seqused_k
-            None,  # block_table
+            seqused_k_xla,  # seqused_k
+            block_table_xla,  # block_table
         )
         xm.mark_step()
         xm.wait_device_ops()
