@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-VLLM_ROOT="$SCRIPT_DIR/../../.."
+VLLM_ROOT="$SCRIPT_DIR/../../../.."
 
 echo "========================================"
 echo "Building XLA custom call (vLLM-style compilation)"
