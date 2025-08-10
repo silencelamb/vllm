@@ -89,9 +89,10 @@ def flash_attn_varlen_impl(
     softmax_lse_shape = [num_heads, total_q]
     
     # Add output buffers at the end
-    out = torch.empty(out_shape, dtype=q.dtype, device=q.device)
-    softmax_lse = torch.empty(softmax_lse_shape, dtype=torch.float32, device=q.device)
-    buffers.extend([out, softmax_lse])
+    # 这部分必须去掉，否则结果不正确
+    # out = torch.empty(out_shape, dtype=q.dtype, device=q.device)
+    # softmax_lse = torch.empty(softmax_lse_shape, dtype=torch.float32, device=q.device)
+    # buffers.extend([out, softmax_lse])
     
     # Call XLA custom op
     outputs = torch_xla._XLAC._xla_custom_call(
