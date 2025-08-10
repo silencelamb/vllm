@@ -61,14 +61,14 @@ vLLM是一个开源的大模型推理引擎. 我的开发目标是添加XLA GPU 
             )
 - @vllm/platforms/xla_gpu.py: 实现新增XLA GPU平台
 - @tests/xla_gpu/test_compilation.py: 测试用例，测试XLA GPU编译和执行
-- @tests/xla_gpu/test_debug_custom_call.py: 是一个通过torch xla提供的custom call注册custom op的测试用例和示例，主要是为了测试XLA GPU的custom op注册和执行的例子，目前是一个简单的加法算子，后续可以扩展为更复杂的算子。
-- @playground/custom_call/naive_ctypes/下有2个示例，torch xla注册的custom op可以很好的和torch.compiple(backend='openxla')兼容，目前是一个简单的加法算子和1个rms_norm算子，后续可以扩展为更复杂的算子。
+- @playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/compile_xla_vllm_style.sh 是编译so的脚本，@playground/custom_call/ctypes_reuse_kernel/reshape_and_cache_flash/test_tpu_style_solution.py 是使用torch xla以及torch.compile调用和测试的脚本，结果与vLLM直接调用reshape_and_cache_flash是一致的
+- @playground/custom_call/flash-attn/compile_flash_attn_xla.sh  是编译so的脚本，@playground/custom_call/flash-attn/test_flash_attn_xla.py 是使用torch xla以及torch.compile调用和测试的脚本，实现的torch.ops.xla.flash_attn_varlen_op 结果与flash_attn_varlen_func是一致的
 
 ## 后续工作
 
 后续工作包括：
 
-1. 利
+1. @vllm/v1/attention/backends/xla_gpu_native.py 里的flash_attn_varlen_func 换成调用 torch.ops.xla.flash_attn_varlen_op，reshape_and_cache_flash换成torch.ops.xla.reshape_and_cache_update_op的调用
 
 ## 规范说明
 
