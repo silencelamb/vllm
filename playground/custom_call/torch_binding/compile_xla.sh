@@ -47,7 +47,7 @@ rm -f *.o *.so
 rm -rf build *.egg-info
 rm -f cache_kernels_local.cu setup_ext.py
 
-# Step 1: Compile cache_kernels.cu
+# Step 1: Compile cache_kernels.cu from vLLM
 echo ""
 echo "[1/4] Compiling cache_kernels.cu..."
 nvcc $NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
@@ -62,14 +62,18 @@ nvcc $NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
 
 # Step 3: Link into XLA shared library
 echo "[3/4] Linking XLA shared library..."
-g++ -pthread -shared \
+g++ -pthread -shared -fPIC \
     cache_kernels_xla.o \
     reshape_and_cache_xla_pure.o \
     -L"$TORCH_LIB" \
     -L"$CUDA_HOME/lib64" \
     -Wl,--no-as-needed \
-    -lc10 -lc10_cuda -ltorch -ltorch_cpu -ltorch_cuda \
+    -Wl,--whole-archive \
+    -ltorch -ltorch_cpu -ltorch_cuda \
+    -Wl,--no-whole-archive \
+    -lc10 -lc10_cuda \
     -lcudart \
+    -Wl,-rpath,"$TORCH_LIB" \
     -Wl,--allow-shlib-undefined \
     -o reshape_and_cache_xla.so
 
@@ -94,7 +98,7 @@ setup(
             'reshape_and_cache_xla_ext',
             sources=[
                 'reshape_and_cache_flash_wrapper.cc',
-                'cache_kernels_local.cu',  # Use local copy to avoid path issues
+                'cache_kernels_local.cu',  # Use vLLM's cache_kernels.cu
             ],
             include_dirs=[
                 os.path.join(vllm_root, 'csrc'),
