@@ -10,42 +10,39 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <optional>
 
 // Forward declaration of the flash-attention function from vLLM
 // This matches the signature in vllm/vllm_flash_attn/_vllm_fa2_C.so
-namespace torch {
-namespace ops {
-namespace _vllm_fa2_C {
+namespace flash {
 
-// The actual varlen_fwd function signature from flash-attention
-// Returns: (out, softmax_lse)
-std::vector<at::Tensor> varlen_fwd(
-    at::Tensor& q,              // total_q x num_heads x head_size
-    at::Tensor& k,              // total_k x num_heads_k x head_size  
-    at::Tensor& v,              // total_k x num_heads_k x head_size
-    at::Tensor& out,            // total_q x num_heads x head_size
-    at::Tensor& cu_seqlens_q,   // batch_size + 1
-    at::Tensor& cu_seqlens_k,   // batch_size + 1  
-    at::Tensor& seqused_k,      // batch_size (optional)
-    at::Tensor& leftpad_k,      // batch_size (optional) 
-    at::Tensor& block_table,    // batch_size x max_blocks (optional)
-    at::Tensor& alibi_slopes,   // num_heads (optional)
+// The actual mha_varlen_fwd function signature from flash-attention
+// Based on the symbol: _ZN5flash14mha_varlen_fwdERN2at6TensorERKS1_S4_RSt8optionalIS1_ES4_S4_S7_RS5_IS3_ES7_S7_iiffbbiifbS5_INS0_9GeneratorEE
+std::vector<at::Tensor> mha_varlen_fwd(
+    at::Tensor& q,                          // total_q x num_heads x head_size
+    const at::Tensor& k,                    // total_k x num_heads_k x head_size  
+    const at::Tensor& v,                    // total_k x num_heads_k x head_size
+    std::optional<at::Tensor>& out_,        // total_q x num_heads x head_size
+    const at::Tensor& cu_seqlens_q,         // batch_size + 1
+    const at::Tensor& cu_seqlens_k,         // batch_size + 1  
+    std::optional<at::Tensor>& seqused_k,   // batch_size (optional)
+    std::optional<const at::Tensor>& leftpad_k_, // batch_size (optional) 
+    std::optional<at::Tensor>& block_table_, // batch_size x max_blocks (optional)
+    std::optional<at::Tensor>& alibi_slopes_, // num_heads (optional)
     int max_seqlen_q,
-    int max_seqlen_k,
-    float p_dropout,
-    float softmax_scale,
-    bool zero_tensors,
+    const int max_seqlen_k,
+    const float p_dropout,
+    const float softmax_scale,
+    const bool zero_tensors,
     bool is_causal,
     int window_size_left,
     int window_size_right,
-    float softcap,
-    bool return_softmax,
-    at::Generator gen
+    const float softcap,
+    const bool return_softmax,
+    std::optional<at::Generator> gen_
 );
 
-} // namespace _vllm_fa2_C
-} // namespace ops
-} // namespace torch
+} // namespace flash
 
 // Utility function to convert shape to string
 std::string shape_to_string(const std::vector<long int>& shape) {
@@ -220,35 +217,52 @@ void flash_attn_varlen_xla_custom_call(
     cudaStream_t stream = reinterpret_cast<cudaStream_t>(stream_ptr);
     c10::cuda::CUDAStreamGuard stream_guard(c10::cuda::getStreamFromExternal(stream, q.device().index()));
     
-    // Create empty tensors for unused parameters
-    torch::Tensor leftpad_k = torch::empty({0}, torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA));
-    torch::Tensor alibi_slopes = torch::empty({0}, torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA));
+    // Create optional parameters
+    std::optional<at::Tensor> out_opt = out;
+    std::optional<at::Tensor> seqused_k_opt;
+    if (has_seqused_k) {
+        seqused_k_opt = seqused_k;
+    }
+    
+    std::optional<at::Tensor> block_table_opt;
+    if (has_block_table) {
+        block_table_opt = block_table;
+    }
+    
+    std::optional<const at::Tensor> leftpad_k_opt;  // Leave empty
+    std::optional<at::Tensor> alibi_slopes_opt;      // Leave empty
+    std::optional<at::Generator> gen_opt;            // Leave empty
     
     // Call the actual flash-attention function
-    // Note: We're using the vLLM compiled version
-    auto results = torch::ops::_vllm_fa2_C::varlen_fwd(
-        q, k, v, out,
+    // Note: We're using the vLLM compiled version in flash namespace
+    auto results = flash::mha_varlen_fwd(
+        q, k, v,
+        out_opt,
         cu_seqlens_q,
         cu_seqlens_k,
-        seqused_k,
-        leftpad_k,     // empty - not used
-        block_table,
-        alibi_slopes,  // empty - not used
+        seqused_k_opt,
+        leftpad_k_opt,     // empty - not used
+        block_table_opt,
+        alibi_slopes_opt,  // empty - not used
         max_seqlen_q,
         max_seqlen_k,
-        0.0f,          // p_dropout - no dropout for inference
+        0.0f,              // p_dropout - no dropout for inference
         softmax_scale,
-        false,         // zero_tensors
+        false,             // zero_tensors
         is_causal,
         window_size_left,
         window_size_right,
         softcap,
-        false,         // return_softmax - we don't need the full attention matrix
-        at::Generator() // dummy generator since no dropout
+        false,             // return_softmax - we don't need the full attention matrix
+        gen_opt            // empty generator since no dropout
     );
     
-    // Results are already written to the output buffers (out and softmax_lse)
-    // since we passed them as references
+    // The results vector contains [output, softmax_lse]
+    // The output tensor is already in our 'out' buffer
+    // Copy softmax_lse if it was returned
+    if (results.size() > 1) {
+        softmax_lse.copy_(results[1]);
+    }
 }
 
 } // extern "C"
