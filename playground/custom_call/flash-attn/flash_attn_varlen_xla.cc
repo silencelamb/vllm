@@ -244,11 +244,6 @@ void flash_attn_varlen_xla_custom_call(
         seqused_k_opt = seqused_k;
     }
     
-    std::optional<at::Tensor> block_table_opt;
-    if (has_block_table) {
-        block_table_opt = block_table;
-    }
-    
     std::optional<const at::Tensor> leftpad_k_opt;  // Leave empty
     std::optional<at::Tensor> alibi_slopes_opt;      // Leave empty
     std::optional<at::Generator> gen_opt;            // Leave empty
