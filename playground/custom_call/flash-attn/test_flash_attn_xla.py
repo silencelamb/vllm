@@ -90,8 +90,8 @@ def flash_attn_varlen_impl(
             block_size = k.shape[1]
             max_blocks_per_seq = block_table.shape[1]
         else:
-            # Default values
-            block_size = 8
+            # Default values (block_size must be divisible by 16)
+            block_size = 16
             max_blocks_per_seq = (max_seqlen_k + block_size - 1) // block_size
     
     # Create descriptor with all parameters
@@ -417,12 +417,12 @@ def test_with_block_table():
     # Paged attention configuration
     batch_size = 2
     seqlen_q = 4
-    seqlen_k = 16  # Longer K sequence for paged attention
+    seqlen_k = 32  # Longer K sequence for paged attention
     num_heads = 4
     num_heads_k = num_heads  # Same for simplicity
     head_size = 64
-    block_size = 8  # Each block holds 8 tokens
-    num_blocks_per_seq = (seqlen_k + block_size - 1) // block_size  # 2 blocks for seqlen_k=16
+    block_size = 16  # Each block holds 16 tokens (must be divisible by 16 for flash attention)
+    num_blocks_per_seq = (seqlen_k + block_size - 1) // block_size  # 2 blocks for seqlen_k=32
     total_blocks = batch_size * num_blocks_per_seq  # Total blocks needed
     
     total_q = batch_size * seqlen_q
