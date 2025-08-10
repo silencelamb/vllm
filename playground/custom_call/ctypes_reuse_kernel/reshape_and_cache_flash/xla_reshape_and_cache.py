@@ -101,7 +101,7 @@ XLA_LIB.impl("reshape_and_cache_flash", reshape_and_cache_flash_xla_impl, "XLA")
 
 # Implementation for CUDA (using the C++ extension)
 @impl(XLA_LIB, "reshape_and_cache_flash", "CUDA")
-def reshape_and_cache_update_op_cuda(
+def reshape_and_cache_flash_cuda(
     key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
     try:
@@ -141,8 +141,8 @@ def reshape_and_cache_update_op_cuda(
 
 
 # Fake implementation for meta tensors (torch.compile)
-@register_fake("xla::reshape_and_cache_update_op")
-def reshape_and_cache_update_op_fake(
+@register_fake("xla::reshape_and_cache_flash")
+def reshape_and_cache_flash_fake(
     key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
     out_k = torch.empty_strided(

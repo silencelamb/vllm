@@ -9,33 +9,6 @@ import time
 from xla_reshape_and_cache import reshape_and_cache_flash, setup_custom_call
 
 
-@torch.compile(backend="openxla")
-def compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping):
-    # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-    # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
-    # Create scale tensors (1.0 means no scaling)
-    # k_scale = torch.ones(1, dtype=torch.float32, device=device)
-    # v_scale = torch.ones(1, dtype=torch.float32, device=device)
-    k_scale = None
-    v_scale = None
-
-    # Get new caches
-    new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
-        key, value, key_cache, value_cache, slot_mapping, "auto", k_scale, v_scale
-    )
-    # print(key_cache, value_cache)
-    # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
-    # Since our custom op returns the modified caches (workaround for XLA GPU issue),
-    # this copy is essentially a no-op but maintains compatibility with TPU pattern
-
-    # new_value_cache.copy_(value_cache)
-    # new_key_cache.copy_(key_cache)
-
-    # value_cache.copy_(new_value_cache)
-    # key_cache.copy_(new_key_cache)
-
-    return new_key_cache, new_value_cache
-
 
 def test_basic_functionality():
     """Test basic functionality on XLA device."""
@@ -78,7 +51,7 @@ def test_basic_functionality():
     # Execute
     # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
     # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
-    reshape_and_cache_flash(
+    _, _= reshape_and_cache_flash(
         key, value, key_cache, value_cache, slot_mapping, "auto", None, None
     )
     # key_cache.copy_(new_key_cache)
@@ -91,6 +64,8 @@ def test_basic_functionality():
 
     # import pdb; pdb.set_trace()  # Debugging breakpoint
     # Verify data was written
+
+    print(f"key_cache: {key_cache}, value_cache: {value_cache}")
     if (key_cache != 0).any() and (value_cache != 0).any():
         print("✓ Caches were updated successfully")
 
@@ -131,7 +106,6 @@ def test_torch_compile():
         xm.mark_step()
         xm.wait_device_ops()
 
-        print(f"new_key_cache: {new_key_cache}, new_value_cache: {new_value_cache}")
         print(f"key_cache: {key_cache}, value_cache: {value_cache}")
         print(f"✓ torch.compile test completed")
 
