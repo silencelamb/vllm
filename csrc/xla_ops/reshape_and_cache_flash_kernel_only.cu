@@ -57,12 +57,14 @@ __global__ void reshape_and_cache_flash_kernel(
                                       head_idx * head_stride + head_offset;
     scalar_t tgt_key = key[src_key_idx];
     scalar_t tgt_value = value[src_value_idx];
-    // printf("blockIdx.x: %d, threadIdx.x: %d\n", blockIdx.x, threadIdx.x);
+
     printf(
-        "block_idx: %ld, block_offset: %ld, head_idx: %d, head_offset: %d, "
-        "tgt_key_value_idx: %ld, tgt_key: %f, tgt_value: %f\n",
-        block_idx, block_offset, head_idx, head_offset, tgt_key_value_idx,
-        static_cast<float>(tgt_key), static_cast<float>(tgt_value));
+        "blockIdx.x: %d, threadIdx.x: %d, block_idx: %ld, block_offset: %ld, "
+        "head_idx: %d, head_offset: %d, tgt_key_value_idx: %ld, tgt_key: %f, "
+        "tgt_value: %f\n",
+        blockIdx.x, threadIdx.x, block_idx, block_offset, head_idx, head_offset,
+        tgt_key_value_idx, static_cast<float>(tgt_key),
+        static_cast<float>(tgt_value));
 
     // For kAuto mode, no fp8 conversion
     if (kv_dt == Fp8KVCacheDataType::kAuto) {

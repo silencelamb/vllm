@@ -8,42 +8,31 @@ import torch_xla.core.xla_model as xm
 import ctypes
 import struct
 from torch.library import Library, impl, register_fake
+from torch_xla.experimental.custom_kernel import XLA_LIB
 from typing import Optional, Tuple
-
-# Create library for our custom ops
-xla_cache_lib = Library("xla_cache", "FRAGMENT")
 
 
 def setup_custom_call():
     """Compile and register the custom call."""
-    # Compile the shared library
-    lib_path = os.path.join(os.path.dirname(__file__), "reshape_and_cache_xla.so")
-    
-    if not os.path.exists(lib_path):
-        print("Compiling XLA custom call library...")
-        compile_script = os.path.join(os.path.dirname(__file__), "compile_xla.sh")
-        if os.system(f"bash {compile_script}") != 0:
+    if not os.path.exists("reshape_and_cache_xla.so"):
+        print("Compiling library...")
+        if os.system("bash compile_xla_vllm_style.sh") != 0:
             raise RuntimeError("Compilation failed")
     
-    # Load the library
-    lib = ctypes.CDLL(lib_path, ctypes.RTLD_GLOBAL)
-    
-    # Get the function address
+    lib = ctypes.CDLL("./reshape_and_cache_xla.so", ctypes.RTLD_GLOBAL)
     func_addr = ctypes.cast(lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
     
-    # Create PyCapsule
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
     PyCapsule_New.restype = ctypes.py_object
     PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
     capsule = PyCapsule_New(func_addr, None, None)
     
-    # Register with XLA
     torch_xla._XLAC._xla_register_custom_call_target(
         "vllm_reshape_and_cache_flash",
         capsule,
         "CUDA"
     )
-    print("✓ XLA custom call registered")
+    print("✓ Custom call registered")
 
 
 def reshape_and_cache_flash_xla_impl(
@@ -75,12 +64,13 @@ def reshape_and_cache_flash_xla_impl(
     descriptor = descriptor_str.encode('utf-8')
     
     # Prepare buffers
-    # XLA expects: outputs first, then inputs
-    buffers = [key_cache, value_cache, key, value, slot_mapping]
+    buffers = [key, value, key_cache, value_cache, slot_mapping]
     if has_k_scale:
         buffers.append(k_scale)
     if has_v_scale:
         buffers.append(v_scale)
+    buffers.extend([key_cache, value_cache])  # outputs (last 2)
+    # 如果没有这个extend，就把结果写到output的tensor上了
     
     # Call XLA custom op
     outputs = torch_xla._XLAC._xla_custom_call(
@@ -98,7 +88,7 @@ def reshape_and_cache_flash_xla_impl(
 
 
 # Define the operation that returns new tensors
-xla_cache_lib.define(
+XLA_LIB.define(
     "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
     "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
     "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
@@ -106,19 +96,10 @@ xla_cache_lib.define(
 
 
 # Implementation for XLA
-@impl(xla_cache_lib, "reshape_and_cache_update_op", "XLA")
-def reshape_and_cache_update_op_xla(
-    key, value, key_cache, value_cache, slot_mapping,
-    kv_cache_dtype, k_scale, v_scale
-):
-    return reshape_and_cache_flash_xla_impl(
-        key, value, key_cache, value_cache,
-        slot_mapping, kv_cache_dtype, k_scale, v_scale
-    )
-
+XLA_LIB.impl("reshape_and_cache_update_op", reshape_and_cache_flash_xla_impl, "XLA")
 
 # Implementation for CUDA (using the C++ extension)
-@impl(xla_cache_lib, "reshape_and_cache_update_op", "CUDA")
+@impl(XLA_LIB, "reshape_and_cache_update_op", "CUDA")
 def reshape_and_cache_update_op_cuda(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
@@ -147,19 +128,21 @@ def reshape_and_cache_update_op_cuda(
 
 
 # Fake implementation for meta tensors (torch.compile)
-@register_fake("xla_cache::reshape_and_cache_update_op")
+@register_fake("xla::reshape_and_cache_update_op")
 def reshape_and_cache_update_op_fake(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
 ):
-    # Return tensors with same shape/dtype as caches
-    ctx = torch._custom_op.impl.get_ctx()
-    key_cache_out = ctx.create_unbacked_symint(key_cache.shape, dtype=key_cache.dtype)
-    value_cache_out = ctx.create_unbacked_symint(value_cache.shape, dtype=value_cache.dtype)
-    return key_cache_out, value_cache_out
+    out_k = torch.empty_strided(
+        key_cache.shape, key_cache.stride(), dtype=key_cache.dtype, device="meta"
+    )
+    out_v = torch.empty_strided(
+        value_cache.shape, value_cache.stride(), dtype=value_cache.dtype, device="meta"
+    )
+    return out_k, out_v
 
 
-def reshape_and_cache_flash_tpu_style(
+def reshape_and_cache_flash(
     key: torch.Tensor,
     value: torch.Tensor,
     key_cache: torch.Tensor,
@@ -177,7 +160,7 @@ def reshape_and_cache_flash_tpu_style(
     #     torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
     
     # Get new caches
-    new_key_cache, new_value_cache = torch.ops.xla_cache.reshape_and_cache_update_op(
+    new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
         key, value, key_cache, value_cache,
         slot_mapping, kv_cache_dtype, k_scale, v_scale
     )
@@ -186,24 +169,6 @@ def reshape_and_cache_flash_tpu_style(
     # key_cache.copy_(new_key_cache)
     # value_cache.copy_(new_value_cache)
     return new_key_cache, new_value_cache
-
-
-# Convenience function
-def reshape_and_cache_flash(
-    key: torch.Tensor,
-    value: torch.Tensor,
-    key_cache: torch.Tensor,
-    value_cache: torch.Tensor,
-    slot_mapping: torch.Tensor,
-    kv_cache_dtype: str = "auto",
-    k_scale: Optional[torch.Tensor] = None,
-    v_scale: Optional[torch.Tensor] = None,
-) -> None:
-    """Main entry point that automatically selects the appropriate implementation."""
-    reshape_and_cache_flash_tpu_style(
-        key, value, key_cache, value_cache,
-        slot_mapping, kv_cache_dtype, k_scale, v_scale
-    )
 
 
 # Initialize when module is imported

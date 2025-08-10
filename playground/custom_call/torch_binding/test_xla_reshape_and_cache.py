@@ -8,6 +8,34 @@ import torch_xla.core.xla_model as xm
 import time
 from xla_reshape_and_cache import reshape_and_cache_flash, setup_custom_call
 
+@torch.compile(backend="openxla")
+def compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping):
+    # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+    # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+    # Create scale tensors (1.0 means no scaling)
+    # k_scale = torch.ones(1, dtype=torch.float32, device=device)
+    # v_scale = torch.ones(1, dtype=torch.float32, device=device)
+    k_scale = None
+    v_scale = None
+    
+    # Get new caches
+    new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
+        key, value, key_cache, value_cache,
+        slot_mapping, "auto", k_scale, v_scale
+    )
+    # print(key_cache, value_cache)
+    # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
+    # Since our custom op returns the modified caches (workaround for XLA GPU issue),
+    # this copy is essentially a no-op but maintains compatibility with TPU pattern
+
+    # new_value_cache.copy_(value_cache)
+    # new_key_cache.copy_(key_cache)
+    
+    # value_cache.copy_(new_value_cache)
+    # key_cache.copy_(new_key_cache)
+
+    return new_key_cache, new_value_cache
+
 
 def test_basic_functionality():
     """Test basic functionality on XLA device."""
@@ -18,23 +46,22 @@ def test_basic_functionality():
     device = xm.xla_device()
     
     # Test parameters
-    num_tokens = 4
+    num_tokens = 1
     num_heads = 2
-    head_size = 8
+    head_size = 2
     num_blocks = 2
-    block_size = 16
+    block_size = 2
     
     # Create test tensors
     key = torch.randn(num_tokens, num_heads, head_size, device=device).contiguous()
     value = torch.randn(num_tokens, num_heads, head_size, device=device).contiguous() * 2.0
     key_cache = torch.zeros(num_blocks, block_size, num_heads, head_size, device=device).contiguous()
     value_cache = torch.zeros(num_blocks, block_size, num_heads, head_size, device=device).contiguous()
-    slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device)
+    # slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device).contiguous()
+    slot_mapping = torch.tensor([0], dtype=torch.int64, device=device).contiguous()
     
     # Store initial data pointers
-    key_ptr = key_cache.data_ptr()
-    value_ptr = value_cache.data_ptr()
-    
+  
     print(f"Input shapes:")
     print(f"  key: {key.shape}")
     print(f"  value: {value.shape}")
@@ -43,20 +70,21 @@ def test_basic_functionality():
     print(f"  slot_mapping: {slot_mapping}")
     
     # Execute
-    reshape_and_cache_flash(
+    # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+    # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+    new_key_cache, new_value_cache = reshape_and_cache_flash(
         key, value, key_cache, value_cache,
         slot_mapping, "auto", None, None
     )
-    
-    xm.mark_step()
+    # key_cache.copy_(new_key_cache)
+    # value_cache.copy_(new_value_cache)
+    xm.mark_step()  
     xm.wait_device_ops()
     
     # Check results
     print(f"\n✓ Basic test completed")
-    print(f"  Key cache ptr same: {key_cache.data_ptr() == key_ptr}")
-    print(f"  Value cache ptr same: {value_cache.data_ptr() == value_ptr}")
     
-    import pdb; pdb.set_trace()  # Debugging breakpoint
+    # import pdb; pdb.set_trace()  # Debugging breakpoint
     # Verify data was written
     if (key_cache != 0).any() and (value_cache != 0).any():
         print("✓ Caches were updated successfully")
@@ -80,78 +108,28 @@ def test_torch_compile():
     
     device = xm.xla_device()
     
-    @torch.compile(backend="openxla")
-    def compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping):
-        reshape_and_cache_flash(
-            key, value, key_cache, value_cache,
-            slot_mapping, "auto", None, None
-        )
-        # Return something to verify execution
-        return key_cache.abs().sum() + value_cache.abs().sum()
     
     # Test data
-    key = torch.randn(8, 4, 16, device=device)
-    value = torch.randn(8, 4, 16, device=device)
-    key_cache = torch.zeros(2, 32, 4, 16, device=device)
-    value_cache = torch.zeros(2, 32, 4, 16, device=device)
-    slot_mapping = torch.arange(8, dtype=torch.int64, device=device)
+    key = torch.randn(4, 2, 4, device=device).contiguous()
+    value = torch.randn(4, 2, 4, device=device).contiguous()
+    key_cache = torch.zeros(2, 8, 2, 4, device=device).contiguous()
+    value_cache = torch.zeros(2, 8, 2, 4, device=device).contiguous()
+    slot_mapping = torch.arange(4, dtype=torch.int64, device=device)
     
     try:
         # Warmup
-        result = compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
+        new_key_cache, new_value_cache = compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
         xm.mark_step()
+        xm.wait_device_ops()
         
+        print(f"new_key_cache: {new_key_cache}, new_value_cache: {new_value_cache}")
+        print(f"key_cache: {key_cache}, value_cache: {value_cache}")
         print(f"✓ torch.compile test completed")
-        print(f"  Result sum: {result.item():.4f}")
-        
-        # Run again to test caching
-        key_cache.zero_()
-        value_cache.zero_()
-        result2 = compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
-        xm.mark_step()
-        
-        print(f"✓ Second run completed (tests compilation caching)")
-        print(f"  Result sum: {result2.item():.4f}")
         
     except Exception as e:
         print(f"✗ torch.compile test failed: {e}")
         import traceback
         traceback.print_exc()
-
-
-def test_with_scaling():
-    """Test with FP8 scaling."""
-    print("\n" + "="*60)
-    print("Testing with FP8 Scaling")
-    print("="*60)
-    
-    device = xm.xla_device()
-    
-    # Small test case
-    key = torch.ones(2, 2, 4, device=device)
-    value = torch.ones(2, 2, 4, device=device) * 2.0
-    key_cache = torch.zeros(1, 8, 2, 4, device=device)
-    value_cache = torch.zeros(1, 8, 2, 4, device=device)
-    slot_mapping = torch.tensor([0, 1], dtype=torch.int64, device=device)
-    
-    # Scaling factors
-    k_scale = torch.tensor([0.5], device=device)
-    v_scale = torch.tensor([0.25], device=device)
-    
-    # Execute with scaling
-    reshape_and_cache_flash(
-        key, value, key_cache, value_cache,
-        slot_mapping, "fp8", k_scale, v_scale
-    )
-    
-    xm.mark_step()
-    
-    print("✓ FP8 scaling test completed")
-    print(f"  Expected key value: 0.5 (1.0 * 0.5)")
-    print(f"  Expected value value: 0.5 (2.0 * 0.25)")
-    
-    # Note: Actual verification depends on FP8 support in the kernel
-
 
 def test_padding_tokens():
     """Test handling of padding tokens."""
@@ -169,15 +147,14 @@ def test_padding_tokens():
     # slot_mapping with -1 for padding
     slot_mapping = torch.tensor([0, 1, -1, 2], dtype=torch.int64, device=device)
     
-    reshape_and_cache_flash(
-        key, value, key_cache, value_cache,
-        slot_mapping, "auto", None, None
-    )
-    
+    new_key_cache, new_value_cache = compiled_reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
     xm.mark_step()
-    
-    print("✓ Padding token test completed")
-    print("  Tokens 0, 1, 3 should be cached (token 2 is padding)")
+    xm.wait_device_ops()
+    if ((key_cache[0,2,:,:].cpu() == key[3].cpu()).all()):
+        print("✓ Padding token test completed")
+        print("  Tokens 0, 1, 3 should be cached (token 2 is padding)")
+    else:
+        print('× test_padding_tokens Not Pass!')
 
 
 def test_xla_graph_optimization():
@@ -340,9 +317,8 @@ def main():
     # Run all tests
     tests = [
         test_basic_functionality,
-        # test_torch_compile,
-        # test_with_scaling,
-        # test_padding_tokens,
+        test_torch_compile,
+        test_padding_tokens,
         # test_xla_graph_optimization,
         # test_buffer_donor_optimization,
         # benchmark_performance,

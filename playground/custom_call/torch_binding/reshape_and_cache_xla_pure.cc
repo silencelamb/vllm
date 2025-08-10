@@ -6,6 +6,24 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <cuda_runtime.h>
+#include <stdio.h>
+#include <sstream>
+#include <string>
+#include <vector>
+
+// 工具函数，将 vector 转为字符串
+std::string shape_to_string(const std::vector<long int>& shape) {
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < shape.size(); ++i) {
+        oss << shape[i];
+        if (i != shape.size() - 1) {
+            oss << ", ";
+        }
+    }
+    oss << "]";
+    return oss.str();
+}
 
 // Forward declaration of the vLLM function
 void reshape_and_cache_flash(
@@ -55,6 +73,16 @@ void reshape_and_cache_flash_xla_custom_call(
     bool has_k_scale = std::stoi(next_token()) != 0;
     bool has_v_scale = std::stoi(next_token()) != 0;
     
+    printf("Parsed parameters:\n");
+    printf("  kv_cache_dtype: %s\n", kv_cache_dtype.c_str());
+    printf("  num_tokens: %lld\n", num_tokens);
+    printf("  num_heads: %lld\n", num_heads);
+    printf("  head_size: %lld\n", head_size);
+    printf("  num_blocks: %lld\n", num_blocks);
+    printf("  block_size: %lld\n", block_size);
+    printf("  has_k_scale: %d\n", has_k_scale);
+    printf("  has_v_scale: %d\n", has_v_scale);
+
     // Determine data type
     auto dtype = at::kFloat;
     if (kv_cache_dtype == "half" || kv_cache_dtype == "float16") {
@@ -68,37 +96,24 @@ void reshape_and_cache_flash_xla_custom_call(
     }
     
     // Buffer layout:
-    // buffers[0]: key_cache (output)
-    // buffers[1]: value_cache (output)
-    // buffers[2]: key (input)
-    // buffers[3]: value (input)
+    // buffers[0]: key (input)
+    // buffers[1]: value (input)
+    // buffers[2]: key_cache (output)
+    // buffers[3]: value_cache (output)
     // buffers[4]: slot_mapping (input)
     // buffers[5]: k_scale (optional input)
     // buffers[6]: v_scale (optional input)
     
     // Create tensor wrappers for inputs
     torch::Tensor key = torch::from_blob(
-        buffers[2],
+        buffers[0],
         {num_tokens, num_heads, head_size},
         torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
     );
     
     torch::Tensor value = torch::from_blob(
-        buffers[3],
-        {num_tokens, num_heads, head_size},
-        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
-    );
-    
-    // Create tensor wrappers for caches (output)
-    torch::Tensor key_cache = torch::from_blob(
-        buffers[0],
-        {num_blocks, block_size, num_heads, head_size},
-        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
-    );
-    
-    torch::Tensor value_cache = torch::from_blob(
         buffers[1],
-        {num_blocks, block_size, num_heads, head_size},
+        {num_tokens, num_heads, head_size},
         torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
     );
     
@@ -131,7 +146,27 @@ void reshape_and_cache_flash_xla_custom_call(
     } else {
         v_scale = torch::ones({1}, torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA));
     }
-    
+    int out_buffer_idx = buffer_idx;
+    printf("buffer[2]: %p, buffer[%d]: %p\n", buffers[2], out_buffer_idx, buffers[out_buffer_idx]);
+    // Create tensor wrappers for caches (output)
+    torch::Tensor key_cache = torch::from_blob(
+        buffers[out_buffer_idx++],
+        {num_blocks, block_size, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+    printf("buffer[3]: %p, buffer[%d]: %p\n", buffers[3], out_buffer_idx, buffers[out_buffer_idx]);
+    torch::Tensor value_cache = torch::from_blob(
+        buffers[out_buffer_idx++],
+        {num_blocks, block_size, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+
+    printf("  Key cache shape: %s\n", shape_to_string(key_cache.sizes().vec()).c_str());
+    printf("  Value cache shape: %s\n", shape_to_string(value_cache.sizes().vec()).c_str());
+    printf("  Key shape: %s\n", shape_to_string(key.sizes().vec()).c_str());
+    printf("  Value shape: %s\n", shape_to_string(value.sizes().vec()).c_str());
+    printf("  Slot mapping shape: %s\n", shape_to_string(slot_mapping.sizes().vec()).c_str());
+
     // Set CUDA stream
     cudaStream_t stream = reinterpret_cast<cudaStream_t>(stream_ptr);
     c10::cuda::CUDAStreamGuard stream_guard(c10::cuda::getStreamFromExternal(stream, key.device().index()));
