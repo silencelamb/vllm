@@ -3,7 +3,9 @@
 
 #include <torch/torch.h>
 #include <c10/cuda/CUDAStream.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <cuda_runtime.h>
 
 // Forward declaration of the vLLM function
 void reshape_and_cache_flash(
