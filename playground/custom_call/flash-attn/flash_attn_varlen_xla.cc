@@ -70,7 +70,7 @@ void flash_attn_varlen_xla_custom_call(
     // Parse opaque descriptor
     std::string opaque_str(opaque, opaque_len);
     
-    // Descriptor format: "batch_size|max_seqlen_q|max_seqlen_k|num_heads|num_heads_k|head_size|total_q|total_k|softmax_scale|is_causal|window_left|window_right|softcap|has_block_table|has_seqused_k"
+    // Descriptor format: "batch_size|max_seqlen_q|max_seqlen_k|num_heads|num_heads_k|head_size|total_q|total_k|softmax_scale|is_causal|window_left|window_right|softcap|has_block_table|has_seqused_k|block_size|max_blocks_per_seq"
     size_t pos = 0;
     auto next_token = [&opaque_str, &pos]() -> std::string {
         size_t next_pos = opaque_str.find('|', pos);
@@ -100,6 +100,8 @@ void flash_attn_varlen_xla_custom_call(
     float softcap = std::stof(next_token());
     bool has_block_table = std::stoi(next_token()) != 0;
     bool has_seqused_k = std::stoi(next_token()) != 0;
+    int block_size = has_block_table ? std::stoi(next_token()) : 0;
+    int max_blocks_per_seq = has_block_table ? std::stoi(next_token()) : 0;
     
     printf("Flash Attention Parameters:\n");
     printf("  batch_size: %lld\n", batch_size);
@@ -116,6 +118,9 @@ void flash_attn_varlen_xla_custom_call(
     printf("  softcap: %f\n", softcap);
     printf("  has_block_table: %d\n", has_block_table);
     printf("  has_seqused_k: %d\n", has_seqused_k);
+    if (has_block_table) {
+        printf("  block_size: %d, max_blocks_per_seq: %d\n", block_size, max_blocks_per_seq);
+    }
 
     // Buffer layout:
     // Inputs:
@@ -142,17 +147,35 @@ void flash_attn_varlen_xla_custom_call(
         torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
     );
     
-    torch::Tensor k = torch::from_blob(
-        buffers[buffer_idx++],
-        {total_k, num_heads_k, head_size},
-        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
-    );
-    
-    torch::Tensor v = torch::from_blob(
-        buffers[buffer_idx++],
-        {total_k, num_heads_k, head_size},
-        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
-    );
+    torch::Tensor k, v;
+    if (has_block_table) {
+        // For paged KV cache, K and V have shape (num_blocks, block_size, num_heads_k, head_size)
+        int num_blocks = batch_size * max_blocks_per_seq;
+        k = torch::from_blob(
+            buffers[buffer_idx++],
+            {num_blocks, block_size, num_heads_k, head_size},
+            torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+        );
+        
+        v = torch::from_blob(
+            buffers[buffer_idx++],
+            {num_blocks, block_size, num_heads_k, head_size},
+            torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+        );
+    } else {
+        // Regular K and V tensors
+        k = torch::from_blob(
+            buffers[buffer_idx++],
+            {total_k, num_heads_k, head_size},
+            torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+        );
+        
+        v = torch::from_blob(
+            buffers[buffer_idx++],
+            {total_k, num_heads_k, head_size},
+            torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+        );
+    }
     
     torch::Tensor cu_seqlens_q = torch::from_blob(
         buffers[buffer_idx++],
@@ -180,17 +203,14 @@ void flash_attn_varlen_xla_custom_call(
     }
     
     torch::Tensor block_table;
-    int max_blocks = 0;
+    std::optional<at::Tensor> block_table_opt;
     if (has_block_table) {
-        // Need to know max_blocks - parse from remaining shape info or hardcode
-        max_blocks = 256; // Default value, should be passed in descriptor
         block_table = torch::from_blob(
             buffers[buffer_idx++],
-            {batch_size, max_blocks},
+            {batch_size, max_blocks_per_seq},
             torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA)
         );
-    } else {
-        block_table = torch::empty({0}, torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA));
+        block_table_opt = block_table;
     }
     
     // Output buffers are at the end
