@@ -1,0 +1,144 @@
+// Pure C++ implementation for XLA custom call
+// No Python bindings - just the XLA custom call entry point
+
+#include <torch/torch.h>
+#include <c10/cuda/CUDAStream.h>
+#include <ATen/cuda/CUDAContext.h>
+
+// Forward declaration of the vLLM function
+void reshape_and_cache_flash(
+    torch::Tensor& key,
+    torch::Tensor& value,
+    torch::Tensor& key_cache,
+    torch::Tensor& value_cache,
+    torch::Tensor& slot_mapping,
+    const std::string& kv_cache_dtype,
+    torch::Tensor& k_scale,
+    torch::Tensor& v_scale);
+
+// XLA Custom Call implementation
+extern "C" {
+
+void reshape_and_cache_flash_xla_custom_call(
+    void* stream_ptr,
+    void** buffers,
+    const char* opaque,
+    size_t opaque_len) {
+    
+    // Parse opaque descriptor
+    std::string opaque_str(opaque, opaque_len);
+    
+    // Simple parsing of the opaque string
+    // Format: "kv_cache_dtype|num_tokens|num_heads|head_size|num_blocks|block_size|has_k_scale|has_v_scale"
+    size_t pos = 0;
+    auto next_token = [&opaque_str, &pos]() -> std::string {
+        size_t next_pos = opaque_str.find('|', pos);
+        if (next_pos == std::string::npos) {
+            std::string result = opaque_str.substr(pos);
+            pos = opaque_str.length();
+            return result;
+        }
+        std::string result = opaque_str.substr(pos, next_pos - pos);
+        pos = next_pos + 1;
+        return result;
+    };
+    
+    // Parse parameters
+    std::string kv_cache_dtype = next_token();
+    int64_t num_tokens = std::stoll(next_token());
+    int64_t num_heads = std::stoll(next_token());
+    int64_t head_size = std::stoll(next_token());
+    int64_t num_blocks = std::stoll(next_token());
+    int64_t block_size = std::stoll(next_token());
+    bool has_k_scale = std::stoi(next_token()) != 0;
+    bool has_v_scale = std::stoi(next_token()) != 0;
+    
+    // Determine data type
+    auto dtype = at::kFloat;
+    if (kv_cache_dtype == "half" || kv_cache_dtype == "float16") {
+        dtype = at::kHalf;
+    } else if (kv_cache_dtype == "bfloat16") {
+        dtype = at::kBFloat16;
+    } else if (kv_cache_dtype == "float8_e4m3fn") {
+        dtype = at::kFloat8_e4m3fn;
+    } else if (kv_cache_dtype == "float8_e5m2") {
+        dtype = at::kFloat8_e5m2;
+    }
+    
+    // Buffer layout:
+    // buffers[0]: key_cache (output)
+    // buffers[1]: value_cache (output)
+    // buffers[2]: key (input)
+    // buffers[3]: value (input)
+    // buffers[4]: slot_mapping (input)
+    // buffers[5]: k_scale (optional input)
+    // buffers[6]: v_scale (optional input)
+    
+    // Create tensor wrappers for inputs
+    torch::Tensor key = torch::from_blob(
+        buffers[2],
+        {num_tokens, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+    
+    torch::Tensor value = torch::from_blob(
+        buffers[3],
+        {num_tokens, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+    
+    // Create tensor wrappers for caches (output)
+    torch::Tensor key_cache = torch::from_blob(
+        buffers[0],
+        {num_blocks, block_size, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+    
+    torch::Tensor value_cache = torch::from_blob(
+        buffers[1],
+        {num_blocks, block_size, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+    
+    torch::Tensor slot_mapping = torch::from_blob(
+        buffers[4],
+        {num_tokens},
+        torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA)
+    );
+    
+    // Handle optional scales
+    torch::Tensor k_scale, v_scale;
+    int buffer_idx = 5;
+    
+    if (has_k_scale) {
+        k_scale = torch::from_blob(
+            buffers[buffer_idx++],
+            {1},
+            torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA)
+        );
+    } else {
+        k_scale = torch::ones({1}, torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA));
+    }
+    
+    if (has_v_scale) {
+        v_scale = torch::from_blob(
+            buffers[buffer_idx++],
+            {1},
+            torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA)
+        );
+    } else {
+        v_scale = torch::ones({1}, torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA));
+    }
+    
+    // Set CUDA stream
+    cudaStream_t stream = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStreamGuard stream_guard(c10::cuda::getStreamFromExternal(stream, key.device().index()));
+    
+    // Call the actual vLLM function
+    reshape_and_cache_flash(
+        key, value, key_cache, value_cache,
+        slot_mapping, kv_cache_dtype, k_scale, v_scale
+    );
+}
+
+} // extern "C"

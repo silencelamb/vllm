@@ -54,17 +54,17 @@ nvcc $NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
     -c "$VLLM_ROOT/csrc/cache_kernels.cu" \
     -o cache_kernels_xla.o
 
-# Step 2: Compile the wrapper
-echo "[2/4] Compiling reshape_and_cache_flash_wrapper.cc..."
+# Step 2: Compile the XLA wrapper (pure C++, no Python bindings)
+echo "[2/4] Compiling reshape_and_cache_xla_pure.cc..."
 nvcc $NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
-    -c "$SCRIPT_DIR/reshape_and_cache_flash_wrapper.cc" \
-    -o reshape_and_cache_flash_wrapper.o
+    -c "$SCRIPT_DIR/reshape_and_cache_xla_pure.cc" \
+    -o reshape_and_cache_xla_pure.o
 
 # Step 3: Link into XLA shared library
 echo "[3/4] Linking XLA shared library..."
 g++ -pthread -shared \
     cache_kernels_xla.o \
-    reshape_and_cache_flash_wrapper.o \
+    reshape_and_cache_xla_pure.o \
     -L"$TORCH_LIB" \
     -L"$CUDA_HOME/lib64" \
     -Wl,--no-as-needed \
@@ -130,7 +130,7 @@ python setup_ext.py build_ext --inplace 2>&1 | tail -n 20
 # Clean up temporary files
 echo ""
 echo "Cleaning up temporary files..."
-rm -f reshape_and_cache_flash_wrapper.o cache_kernels_xla.o
+rm -f reshape_and_cache_xla_pure.o cache_kernels_xla.o
 rm -f cache_kernels_local.cu setup_ext.py
 rm -rf build *.egg-info
 
