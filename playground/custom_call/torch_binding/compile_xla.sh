@@ -45,7 +45,7 @@ nvcc -O3 -std=c++17 \
 echo "Linking shared library..."
 g++ -shared -o "$SCRIPT_DIR/reshape_and_cache_xla.so" \
     reshape_and_cache_flash_wrapper.o \
-    "$VLLM_ROOT/build/lib.linux-x86_64-cpython-*/vllm/_cache_ops.cpython-*.so" \
+    "$VLLM_ROOT/vllm/_C.abi3.so" \
     -L"$TORCH_LIB" \
     -L"$CUDA_HOME/lib64" \
     -lc10 -ltorch -ltorch_cpu -ltorch_cuda \

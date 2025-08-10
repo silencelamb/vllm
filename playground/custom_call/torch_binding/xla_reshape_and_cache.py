@@ -7,7 +7,7 @@ import torch_xla
 import torch_xla.core.xla_model as xm
 import ctypes
 import struct
-from torch.library import Library
+from torch.library import Library, impl, register_fake
 from typing import Optional, Tuple
 
 # Create library for our custom ops
@@ -88,13 +88,13 @@ def reshape_and_cache_flash_xla_impl(
         "vllm_reshape_and_cache_flash",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
-        False,  # has_side_effect
+        True,  # has_side_effect
         descriptor,
         2,  # num_outputs
         {}  # extra_attributes
     )
     
-    return outputs[0], outputs[1]
+    return outputs
 
 
 # Define the operation that returns new tensors
@@ -106,7 +106,7 @@ xla_cache_lib.define(
 
 
 # Implementation for XLA
-@xla_cache_lib.impl("reshape_and_cache_update_op", "XLA")
+@impl(xla_cache_lib, "reshape_and_cache_update_op", "XLA")
 def reshape_and_cache_update_op_xla(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
@@ -118,7 +118,7 @@ def reshape_and_cache_update_op_xla(
 
 
 # Implementation for CUDA (using the C++ extension)
-@xla_cache_lib.impl("reshape_and_cache_update_op", "CUDA")
+@impl(xla_cache_lib, "reshape_and_cache_update_op", "CUDA")
 def reshape_and_cache_update_op_cuda(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
@@ -147,7 +147,7 @@ def reshape_and_cache_update_op_cuda(
 
 
 # Fake implementation for meta tensors (torch.compile)
-@xla_cache_lib._register_fake("reshape_and_cache_update_op")
+@register_fake("xla_cache::reshape_and_cache_update_op")
 def reshape_and_cache_update_op_fake(
     key, value, key_cache, value_cache, slot_mapping,
     kv_cache_dtype, k_scale, v_scale
@@ -172,9 +172,9 @@ def reshape_and_cache_flash_tpu_style(
     """TPU-style wrapper that uses buffer donor optimization."""
     
     # Mark caches as buffer donors if XLA supports it
-    if hasattr(torch.ops.xla, 'dynamo_set_buffer_donor_'):
-        torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-        torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+    # if hasattr(torch.ops.xla, 'dynamo_set_buffer_donor_'):
+    #     torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+    #     torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
     
     # Get new caches
     new_key_cache, new_value_cache = torch.ops.xla_cache.reshape_and_cache_update_op(
@@ -183,8 +183,9 @@ def reshape_and_cache_flash_tpu_style(
     )
     
     # Copy back (will be optimized away by XLA with buffer donor)
-    key_cache.copy_(new_key_cache)
-    value_cache.copy_(new_value_cache)
+    # key_cache.copy_(new_key_cache)
+    # value_cache.copy_(new_value_cache)
+    return new_key_cache, new_value_cache
 
 
 # Convenience function

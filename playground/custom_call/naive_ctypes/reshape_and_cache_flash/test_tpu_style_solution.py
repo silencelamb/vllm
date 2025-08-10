@@ -284,25 +284,6 @@ def test_comparison_with_vllm():
     # Call XLA custom call
     print("2. Calling XLA custom call implementation...")
     
-    # Debug: Check cache before operation
-    
-    # torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
-    # torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
-    
-    # # Get new caches
-    # new_key_cache_xla, new_value_cache_xla = torch.ops.xla.reshape_and_cache_update_op(
-    #     key_xla, value_xla, key_cache_xla, value_cache_xla,
-    #     slot_mapping_xla, "auto", k_scale_xla, v_scale_xla
-    # )
-    # # print(key_cache, value_cache)
-    # # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
-    # # Since our custom op returns the modified caches (workaround for XLA GPU issue),
-    # # this copy is essentially a no-op but maintains compatibility with TPU pattern
-    # key_cache_xla.copy_(new_key_cache_xla)
-    # value_cache_xla.copy_(new_value_cache_xla)
-    # xm.mark_step()
-    # xm.wait_device_ops()
-    
     
     @torch.compile(backend="openxla")
     def compiled_update(key, value, key_cache, value_cache, slot_mapping):

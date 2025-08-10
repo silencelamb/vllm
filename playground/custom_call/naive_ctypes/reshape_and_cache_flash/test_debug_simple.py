@@ -8,6 +8,11 @@ import torch_xla.core.xla_model as xm
 import ctypes
 import struct
 
+'''
+XLA直接调用测试， PASS
+不加donate
+'''
+
 def setup_custom_call():
     """Compile and register the custom call."""
     if not os.path.exists("reshape_and_cache_flash_xla.so"):

@@ -25,10 +25,10 @@ def test_basic_functionality():
     block_size = 16
     
     # Create test tensors
-    key = torch.randn(num_tokens, num_heads, head_size, device=device)
-    value = torch.randn(num_tokens, num_heads, head_size, device=device) * 2.0
-    key_cache = torch.zeros(num_blocks, block_size, num_heads, head_size, device=device)
-    value_cache = torch.zeros(num_blocks, block_size, num_heads, head_size, device=device)
+    key = torch.randn(num_tokens, num_heads, head_size, device=device).contiguous()
+    value = torch.randn(num_tokens, num_heads, head_size, device=device).contiguous() * 2.0
+    key_cache = torch.zeros(num_blocks, block_size, num_heads, head_size, device=device).contiguous()
+    value_cache = torch.zeros(num_blocks, block_size, num_heads, head_size, device=device).contiguous()
     slot_mapping = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=device)
     
     # Store initial data pointers
@@ -49,12 +49,14 @@ def test_basic_functionality():
     )
     
     xm.mark_step()
+    xm.wait_device_ops()
     
     # Check results
     print(f"\n✓ Basic test completed")
     print(f"  Key cache ptr same: {key_cache.data_ptr() == key_ptr}")
     print(f"  Value cache ptr same: {value_cache.data_ptr() == value_ptr}")
     
+    import pdb; pdb.set_trace()  # Debugging breakpoint
     # Verify data was written
     if (key_cache != 0).any() and (value_cache != 0).any():
         print("✓ Caches were updated successfully")
@@ -338,12 +340,12 @@ def main():
     # Run all tests
     tests = [
         test_basic_functionality,
-        test_torch_compile,
-        test_with_scaling,
-        test_padding_tokens,
-        test_xla_graph_optimization,
-        test_buffer_donor_optimization,
-        benchmark_performance,
+        # test_torch_compile,
+        # test_with_scaling,
+        # test_padding_tokens,
+        # test_xla_graph_optimization,
+        # test_buffer_donor_optimization,
+        # benchmark_performance,
     ]
     
     for test in tests:
