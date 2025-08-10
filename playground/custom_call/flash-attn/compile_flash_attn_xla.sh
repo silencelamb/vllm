@@ -63,10 +63,11 @@ INCLUDE_FLAGS="$INCLUDE_FLAGS -I$CUDA_HOME/include"
 INCLUDE_FLAGS="$INCLUDE_FLAGS -I$VLLM_ROOT/csrc"
 INCLUDE_FLAGS="$INCLUDE_FLAGS -I$VLLM_ROOT"
 
-# Step 1: Compile XLA wrapper
+# Step 1: Compile XLA wrapper  
 echo ""
 echo "[1/2] Compiling Flash Attention XLA wrapper..."
-nvcc $COMMON_NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
+# Use g++ for C++ code (not CUDA kernels)
+g++ -O3 -std=c++17 -fPIC -D_GLIBCXX_USE_CXX11_ABI=$TORCH_ABI $INCLUDE_FLAGS \
     -c "$SCRIPT_DIR/flash_attn_varlen_xla.cc" \
     -o flash_attn_varlen_xla.o
 
@@ -83,7 +84,7 @@ g++ -shared -fPIC \
     -o flash_attn_varlen_xla.so \
     $LINK_FLAGS \
     -Wl,--no-as-needed \
-    -l:_vllm_fa2_C.abi3.so \
+    $VLLM_FA2_LIB \
     -ltorch -ltorch_cpu -ltorch_cuda \
     -lc10 -lc10_cuda \
     -lcudart -lcuda \

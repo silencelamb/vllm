@@ -260,8 +260,11 @@ void flash_attn_varlen_xla_custom_call(
     // The results vector contains [output, softmax_lse]
     // The output tensor is already in our 'out' buffer
     // Copy softmax_lse if it was returned
-    if (results.size() > 1) {
+    if (results.size() > 1 && results[1].defined()) {
         softmax_lse.copy_(results[1]);
+    } else {
+        // If softmax_lse wasn't returned, initialize with zeros
+        softmax_lse.zero_();
     }
 }
 

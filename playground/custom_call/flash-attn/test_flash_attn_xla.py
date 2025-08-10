@@ -165,6 +165,7 @@ def test_simple():
     seqlen_q = 4
     seqlen_k = 8
     num_heads = 2
+    num_heads_k = num_heads  # Same for simplicity
     head_size = 64
     
     # Create test data
@@ -172,8 +173,8 @@ def test_simple():
     total_k = batch_size * seqlen_k
     
     q = torch.randn(total_q, num_heads, head_size, device=device, dtype=torch.float16)
-    k = torch.randn(total_k, num_heads, head_size, device=device, dtype=torch.float16)
-    v = torch.randn(total_k, num_heads, head_size, device=device, dtype=torch.float16)
+    k = torch.randn(total_k, num_heads_k, head_size, device=device, dtype=torch.float16)
+    v = torch.randn(total_k, num_heads_k, head_size, device=device, dtype=torch.float16)
     
     # Create cumulative sequence lengths
     cu_seqlens_q = torch.tensor([0, seqlen_q, 2*seqlen_q], dtype=torch.int32, device=device)
@@ -308,11 +309,13 @@ def test_comparison_with_vllm():
     # Call vLLM's native implementation
     print("\n1. Calling vLLM native implementation...")
     out_vllm = flash_attn_varlen_func(
-        q_cuda, k_cuda, v_cuda,
-        cu_seqlens_q_cuda,
-        cu_seqlens_k_cuda,
-        seqlen_q,
-        seqlen_k,
+        q=q_cuda, 
+        k=k_cuda, 
+        v=v_cuda,
+        max_seqlen_q=seqlen_q,
+        cu_seqlens_q=cu_seqlens_q_cuda,
+        max_seqlen_k=seqlen_k,
+        cu_seqlens_k=cu_seqlens_k_cuda,
         dropout_p=0.0,
         softmax_scale=softmax_scale,
         causal=True,
