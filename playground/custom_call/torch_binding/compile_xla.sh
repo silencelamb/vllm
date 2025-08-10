@@ -53,6 +53,29 @@ g++ -shared -o "$SCRIPT_DIR/reshape_and_cache_xla.so" \
 
 # Also compile as Python extension
 echo "Building Python extension..."
+
+# First compile cache_kernels.cu separately to control output location
+echo "Compiling cache_kernels.cu..."
+nvcc -O3 -std=c++17 \
+    -I"$PYTHON_INCLUDE" \
+    -I"$TORCH_INCLUDE" \
+    -I"$TORCH_INCLUDE/torch/csrc/api/include" \
+    -I"$CUDA_HOME/include" \
+    -I"$VLLM_ROOT/csrc" \
+    -I"$VLLM_ROOT" \
+    -D_GLIBCXX_USE_CXX11_ABI=0 \
+    -DNDEBUG \
+    -Xcompiler -fPIC \
+    -gencode arch=compute_70,code=sm_70 \
+    -gencode arch=compute_75,code=sm_75 \
+    -gencode arch=compute_80,code=sm_80 \
+    -gencode arch=compute_86,code=sm_86 \
+    -c "$VLLM_ROOT/csrc/cache_kernels.cu" \
+    -o cache_kernels.o
+
+# Copy cache_kernels.cu locally to avoid path issues in setup.py
+cp "$VLLM_ROOT/csrc/cache_kernels.cu" cache_kernels_local.cu
+
 cat > "$SCRIPT_DIR/setup_ext.py" << EOF
 from setuptools import setup
 from torch.utils.cpp_extension import CUDAExtension, BuildExtension
@@ -67,7 +90,7 @@ setup(
             'reshape_and_cache_xla_ext',
             sources=[
                 'reshape_and_cache_flash_wrapper.cc',
-                os.path.join(vllm_root, 'csrc/cache_kernels.cu'),
+                'cache_kernels_local.cu',  # Use local copy to avoid path issues
             ],
             include_dirs=[
                 os.path.join(vllm_root, 'csrc'),
@@ -94,11 +117,24 @@ EOF
 cd "$SCRIPT_DIR"
 python setup_ext.py build_ext --inplace
 
+# Also link manually with the pre-compiled object files
+echo "Creating XLA shared library with manual linking..."
+g++ -pthread -shared \
+    cache_kernels.o \
+    reshape_and_cache_flash_wrapper.o \
+    -L"$TORCH_LIB" \
+    -L"$CUDA_HOME/lib64" \
+    -lc10 -ltorch -ltorch_cpu -ltorch_python \
+    -lcudart -lc10_cuda -ltorch_cuda \
+    -o reshape_and_cache_xla_manual.so
+
 # Clean up
-rm -f reshape_and_cache_flash_wrapper.o
+rm -f reshape_and_cache_flash_wrapper.o cache_kernels.o
+rm -f cache_kernels_local.cu
 rm -rf build
 rm -f setup_ext.py
 
 echo "✓ Build completed successfully!"
 echo "  - XLA shared library: $SCRIPT_DIR/reshape_and_cache_xla.so"
+echo "  - XLA manual library: $SCRIPT_DIR/reshape_and_cache_xla_manual.so"
 echo "  - Python extension: $SCRIPT_DIR/reshape_and_cache_xla_ext*.so"
