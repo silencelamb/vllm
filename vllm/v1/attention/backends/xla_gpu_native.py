@@ -80,7 +80,8 @@ def import_xla_custom_ops():
 # Try to import and setup XLA custom ops
 XLA_CUSTOM_OPS_AVAILABLE = False
 try:
-    if xm.is_xla_tensor(torch.zeros(1)):
+    device = xm.xla_device()
+    if device is not None:
         flash_attn_xla, xla_reshape_and_cache = import_xla_custom_ops()
         XLA_CUSTOM_OPS_AVAILABLE = True
         logger.info("XLA custom ops successfully loaded")

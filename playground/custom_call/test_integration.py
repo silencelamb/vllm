@@ -14,7 +14,8 @@ def test_xla_custom_ops_registration():
     print("=" * 60)
     
     # Check if we're on XLA device
-    if not xm.is_xla_tensor(torch.zeros(1)):
+    device = xm.xla_device()
+    if device is None:
         print("Not running on XLA device, skipping test")
         return False
     
@@ -75,13 +76,12 @@ def test_simple_attention():
     print("Testing Simple Attention Operation")
     print("=" * 60)
     
-    if not xm.is_xla_tensor(torch.zeros(1)):
+    device = xm.xla_device()
+    if device is None:
         print("Not running on XLA device, skipping test")
         return False
     
     try:
-        device = xm.xla_device()
-        
         # Create simple test tensors
         batch_size = 2
         seq_len = 4
@@ -143,13 +143,15 @@ def main():
     print("=" * 60)
     
     results = []
-    
-    # Test 1: Check custom ops registration
-    results.append(("Custom Ops Registration", test_xla_custom_ops_registration()))
-    
-    # Test 2: Check XLA GPU attention backend
+
+    # Test 1: Check XLA GPU attention backend
     results.append(("XLA GPU Attention Backend", test_xla_gpu_attention_backend()))
     
+    
+    # Test 2: Check custom ops registration
+    results.append(("Custom Ops Registration", test_xla_custom_ops_registration()))
+    
+
     # Test 3: Run simple attention
     results.append(("Simple Attention Operation", test_simple_attention()))
     
