@@ -70,6 +70,9 @@ class SiluAndMul(CustomOp):
         elif current_platform.is_xpu():
             from vllm._ipex_ops import ipex_ops
             self.op = ipex_ops.silu_and_mul
+        else:
+            # For XLA GPU and other platforms, use native implementation
+            self._forward_method = self.forward_native
 
     def forward_native(self, x: torch.Tensor) -> torch.Tensor:
         """PyTorch-native implementation equivalent to forward()."""
