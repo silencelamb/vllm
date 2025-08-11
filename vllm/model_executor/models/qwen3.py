@@ -229,15 +229,16 @@ ALL_DECODER_LAYER_TYPES = {
 }
 
 
-@support_torch_compile(
-    dynamic_arg_dims={
-        "input_ids": 0,
-        # positions is of shape (3, seq_len) if mrope is enabled for qwen2-vl,
-        # otherwise (seq_len, ).
-        "positions": -1,
-        "intermediate_tensors": 0,
-        "inputs_embeds": 0,
-    })
+# @support_torch_compile(
+#     dynamic_arg_dims={
+#         "input_ids": 0,
+#         # positions is of shape (3, seq_len) if mrope is enabled for qwen2-vl,
+#         # otherwise (seq_len, ).
+#         "positions": -1,
+#         "intermediate_tensors": 0,
+#         "inputs_embeds": 0,
+#     })
+@support_torch_compile
 class Qwen3Model(Qwen2Model):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):

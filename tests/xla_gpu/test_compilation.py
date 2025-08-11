@@ -95,7 +95,7 @@ def test_xla_gpu_compilation():
 
             # Use local model path to avoid network download
             # Replace with your actual local model path
-            model_path = "Qwen/Qwen3-0.6B"  # Please replace with actual path
+            model_path = "meta-llama/Llama-3.2-1B"  # Please replace with actual path
             
             llm = LLM(
                 model=model_path,
@@ -313,7 +313,7 @@ def test_xla_gpu_compilation_simple():
     try:
         # Use local model
         llm = LLM(
-            model="Qwen/Qwen3-0.6B",  # 0.6B model should not require excessive memory
+            model="meta-llama/Llama-3.2-1B",  # 0.6B model should not require excessive memory
             max_num_batched_tokens=128,
             max_model_len=128,
             max_num_seqs=4,
@@ -322,8 +322,6 @@ def test_xla_gpu_compilation_simple():
             data_parallel_size=1,
             gpu_memory_utilization=0.15,
             compilation_config={
-                "backend": "openxla",
-                "use_cudagraph": False,  # 禁用CUDA图以避免缓存问题
                 "custom_ops": ["none"]
             },
             trust_remote_code=True
