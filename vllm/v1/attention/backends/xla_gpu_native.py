@@ -514,9 +514,6 @@ def xla_gpu_paged_attention_final(
         Output tensor [total_tokens, num_heads, head_size]
     """
 
-    if output is None:
-        output = torch.empty_like(query)
-
     # Get the actual number of tokens to process
     num_actual_tokens = attn_metadata.num_actual_tokens
 
@@ -536,19 +533,18 @@ def xla_gpu_paged_attention_final(
             )
 
             # Call the flash attention function (either XLA custom op or original)
-            flash_attn_varlen_func(
-                query[:num_actual_tokens],  # q
-                key_cache,  # k
-                value_cache,  # v
-                output[:num_actual_tokens],  # out
-                attn_metadata.query_start_loc,  # cu_seqlens_q
-                attn_metadata.max_query_len,  # max_seqlen_q
-                seq_lens_to_use,  # seqused_k
-                attn_metadata.max_seq_len,  # max_seqlen_k
-                softmax_scale,  # softmax_scale
-                True,  # causal
-                block_table_to_use,  # block_table
-                attn_metadata.scheduler_metadata,  # scheduler_metadata
+            output = flash_attn_varlen_func(
+                q = query[:num_actual_tokens],  # q
+                k = key_cache,  # k
+                v = value_cache,  # v
+                cu_seqlens_q = attn_metadata.query_start_loc,  # cu_seqlens_q
+                cu_seqlens_k = None, # only used for non-paged prefill
+                max_seqlen_q = attn_metadata.max_query_len,  # max_seqlen_q
+                max_seqlen_k = attn_metadata.max_seq_len,  # max_seqlen_k
+                softmax_scale = softmax_scale,  # softmax_scale
+                seqused_k = seq_lens_to_use,  # seqused_k
+                block_table = block_table_to_use,  # block_table
+                # attn_metadata.scheduler_metadata,  # scheduler_metadata
             )
             return output
         except Exception as e:

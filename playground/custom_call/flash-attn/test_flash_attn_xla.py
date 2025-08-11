@@ -207,16 +207,16 @@ def flash_attn_varlen_op_fake(
 
 
 def flash_attn_varlen_func_xla(
-    q, k_cache, v_cache, cu_seqlens_q, cu_seqlens_k, seqlen_q, seqlen_k, softmax_scale, seqused_k, block_table
+    q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, softmax_scale, seqused_k, block_table
 ):
     return torch.ops.xla.flash_attn_varlen_op(
         q,
-        k_cache,
-        v_cache,
+        k,    # key_cache
+        v,    # value_cache
         cu_seqlens_q,
-        cu_seqlens_k,
-        seqlen_q,
-        seqlen_k,
+        cu_seqlens_k,  # only used for non-paged prefill, else None
+        max_seqlen_q,
+        max_seqlen_k,
         softmax_scale,
         True,  # is_causal
         -1,

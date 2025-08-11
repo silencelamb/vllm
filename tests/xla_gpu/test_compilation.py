@@ -243,7 +243,7 @@ def test_xla_gpu_compilation_simple():
     
     os.environ["VLLM_USE_XLA_GPU"] = "1"
     os.environ["VLLM_USE_V1"] = "1"
-    # os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+    os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
 
     # 禁用可能有问题的自定义算子
     os.environ["VLLM_USE_TRITON_FLASH_ATTN"] = "0"
@@ -282,7 +282,7 @@ def test_xla_gpu_compilation_simple():
 
     # 设置保守的编译选项， 打印很多dynamo的日志
     # os.environ["TORCH_LOGS"] = "+dynamo"
-    # os.environ["TORCH_LOGS"] = "+dynamic"
+    os.environ["TORCH_LOGS"] = "+dynamic"
     # os.environ["TORCHDYNAMO_VERBOSE"] = "1"
     
     # os.environ["TORCH_CPP_LOG_LEVEL"] = "INFO"
@@ -321,16 +321,8 @@ def test_xla_gpu_compilation_simple():
             tensor_parallel_size=1,
             data_parallel_size=1,
             gpu_memory_utilization=0.15,
-            compilation_config= {
-                # Allow Flash Attention custom ops to work
-                "use_torch_compile": True,
-                "backend": "openxla",
-                "torch_compile_options": {
-                    "backend": "openxla",
-                    "dynamic": True,  # Enable dynamic shapes
-                    "fullgraph": True,  # Allow graph breaks for dynamic shapes
-                }
-            },
+            compilation_config={"custom_ops": ["none"]},
+            trust_remote_code=True
         )
 
         # First generation - triggers prefill compilation
