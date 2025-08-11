@@ -204,6 +204,7 @@ class XlaGpuWorker:
 
         # Run profiling to determine memory usage
         with self.model_runner.maybe_setup_dummy_loras(self.lora_config):
+            logger.info(f"self.model_runner.max_num_tokens: {self.model_runner.max_num_tokens}")
             self.model_runner.profile_run(self.model_runner.max_num_tokens)
 
         # Wait for all XLA operations to complete

@@ -324,7 +324,7 @@ def test_xla_gpu_compilation_simple():
             compilation_config={
                 "backend": "openxla",
                 "use_cudagraph": False,  # 禁用CUDA图以避免缓存问题
-                "use_torch_compile": True,  # 暂时禁用torch.compile以测试基本功能
+                "custom_ops": ["none"]
             },
             trust_remote_code=True
         )

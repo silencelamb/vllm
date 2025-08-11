@@ -1322,7 +1322,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             layer_name: attn_metadata
             for layer_name in layer_names
         }
-        
+        logger.info(f"input_ids shape: {input_ids.shape}, position_ids shape: {position_ids.shape}")
         with self.maybe_select_dummy_loras(
                 self.lora_config,
                 np.array([MAX_TOKENS], dtype=np.int32)), set_forward_context(
@@ -1419,9 +1419,8 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             # 添加一个稍微不同的配置
             num_tokens, num_reqs, num_blocks = token_configs[0]
             token_configs.append((num_tokens + 8, max(1, num_reqs - 1), num_blocks))
-            
         for num_tokens, num_reqs, num_blocks in token_configs:
-            logger.info("  -- num_tokens: %d, num_reqs: %d, num_blocks: %d", 
+            logger.info("  -- num_tokens: %d, max_num_reqs: %d, max_num_blocks: %d", 
                        num_tokens, num_reqs, num_blocks)
             self._dummy_run(num_tokens, num_reqs, num_blocks)
             
@@ -1621,6 +1620,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         ]
         
         for tokens, reqs, blocks in configs:
+            logger.info(f"num_tokens: {tokens}, max_num_reqs: {reqs}, max_num_blocks_per_req: {blocks}")
             self._dummy_run(tokens, reqs, blocks)
 
         xm.mark_step()
