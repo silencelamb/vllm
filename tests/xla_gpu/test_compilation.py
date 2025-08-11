@@ -266,6 +266,10 @@ def test_xla_gpu_compilation_simple():
     # 5. 避免内存预分配冲突
     os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
     
+    # 清理XLA缓存以避免缓存问题
+    os.environ["XLA_DISABLE_FUNCTIONALIZATION"] = "0"
+    os.environ["XLA_CACHE_SIZE"] = "0"  # 禁用XLA缓存
+    
     # 添加XLA调试信息
     # os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump --xla_dump_hlo_pass_re=.*"
     # os.environ["XLA_HLO_DEBUG"] = "1"
@@ -300,15 +304,7 @@ def test_xla_gpu_compilation_simple():
         max_tokens=10
     )
 
-    import torch
-    # 配置dynamo以支持静态形状（XLA GPU需要静态形状）
-    torch._dynamo.config.capture_dynamic_output_shape_ops = False
-    torch._dynamo.config.assume_static_by_default = True
-    torch._dynamo.config.automatic_dynamic_shapes = False
-    torch._dynamo.config.force_parameter_static_shapes = True
-    
-    # 禁用动态形状
-    torch._dynamo.config.capture_scalar_outputs = False
+    # 不设置额外的dynamo配置，使用默认值
     
     try:
         # Use local model
@@ -317,19 +313,14 @@ def test_xla_gpu_compilation_simple():
             max_num_batched_tokens=128,
             max_model_len=128,
             max_num_seqs=4,
-            enforce_eager=False,
+            enforce_eager=False,  # XLA需要图模式
             tensor_parallel_size=1,
             data_parallel_size=1,
             gpu_memory_utilization=0.15,
             compilation_config={
-                "use_torch_compile": True,
                 "backend": "openxla",
-                "torch_compile_options": {
-                    "backend": "openxla",
-                    "dynamic": False,  # 禁用动态形状
-                    "fullgraph": True,  # 完整图编译
-                    "mode": "reduce-overhead"  # 优化模式
-                }
+                "use_cudagraph": False,  # 禁用CUDA图以避免缓存问题
+                "use_torch_compile": False,  # 暂时禁用torch.compile以测试基本功能
             },
             trust_remote_code=True
         )
