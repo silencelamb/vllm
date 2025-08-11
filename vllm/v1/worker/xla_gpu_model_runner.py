@@ -1254,13 +1254,10 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # 使用实际的上下文长度，而不是固定值
         MAX_CONTEXT_LEN = num_tokens
         
-        # 配置Dynamo以支持动态形状（只配置一次）
-        if not hasattr(self, '_dynamo_configured'):
-            torch._dynamo.config.capture_dynamic_output_shape_ops = True
-            torch._dynamo.config.assume_static_by_default = False
-            torch._dynamo.config.automatic_dynamic_shapes = True
-            torch._dynamo.config.specialize_int = False
-            self._dynamo_configured = True
+        torch._dynamo.config.capture_dynamic_output_shape_ops = True
+        torch._dynamo.config.assume_static_by_default = False
+        torch._dynamo.config.automatic_dynamic_shapes = True
+        torch._dynamo.config.specialize_int = False
         
         if self.is_multimodal_model:
             input_ids = None
@@ -1320,15 +1317,15 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         
         # 标记动态维度（在_dummy_run中标记，确保编译时识别为动态）
         # 这是从能跑通的GitHub版本学到的关键点
-        if self.is_multimodal_model:
-            torch._dynamo.mark_dynamic(inputs_embeds, 0)
-        else:
-            torch._dynamo.mark_dynamic(input_ids, 0)
-        torch._dynamo.mark_dynamic(position_ids, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
-        torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
+        # if self.is_multimodal_model:
+        #     torch._dynamo.mark_dynamic(inputs_embeds, 0)
+        # else:
+        #     torch._dynamo.mark_dynamic(input_ids, 0)
+        # torch._dynamo.mark_dynamic(position_ids, 0)
+        # torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
+        # torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
+        # torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
+        # torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
 
         layer_names = get_layers_from_vllm_config(self.vllm_config, Attention).keys()
         per_layer_attn_metadata = {
@@ -1738,6 +1735,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
             torch._dynamo.eval_frame.remove_from_cache(
                 compiled_model.original_code_object)
             compiled_model.compiled_codes.clear()
+            torch._dynamo.reset()
 
     @torch.compile(backend="openxla", fullgraph=True, dynamic=False)
     def select_hidden_states(self, hidden_states, indices_do_sample):
