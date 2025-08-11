@@ -266,9 +266,13 @@ def test_xla_gpu_compilation_simple():
     # 5. 避免内存预分配冲突
     os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
     
-    # 清理XLA缓存以避免缓存问题
+    # XLA缓存设置
     os.environ["XLA_DISABLE_FUNCTIONALIZATION"] = "0"
-    os.environ["XLA_CACHE_SIZE"] = "0"  # 禁用XLA缓存
+    # 不要设置XLA_CACHE_SIZE=0，这会禁用缓存导致错误
+    # 让XLA使用默认的缓存大小
+    
+    # 确保XLA编译是同步的
+    os.environ["XLA_FLAGS"] = "--xla_gpu_force_compilation_parallelism=1"
     
     # 添加XLA调试信息
     # os.environ["XLA_FLAGS"] = "--xla_dump_hlo_as_text --xla_dump_to=/tmp/xla_dump --xla_dump_hlo_pass_re=.*"
