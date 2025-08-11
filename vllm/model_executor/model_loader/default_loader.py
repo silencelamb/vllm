@@ -206,9 +206,9 @@ class DefaultModelLoader(BaseModelLoader):
                 self.load_config.pt_load_map_location,
             )
 
-        if current_platform.is_tpu():
-            # In PyTorch XLA, we should call `xm.mark_step` frequently so that
-            # not too many ops are accumulated in the XLA program.
+        if current_platform.is_tpu() or current_platform.is_xla_gpu():
+            # In PyTorch XLA (both TPU and XLA GPU), we should call `xm.mark_step` 
+            # frequently so that not too many ops are accumulated in the XLA program.
             import torch_xla.core.xla_model as xm
 
             def _xla_weights_iterator(iterator: Generator):

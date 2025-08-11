@@ -1175,6 +1175,18 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
 
     def load_model(self) -> None:
         self.device = self.device_config.device
+        
+        # Log compilation backend information
+        logger.info("XLA GPU Compilation Configuration:")
+        logger.info("  - Compilation level: %s", self.vllm_config.compilation_config.level)
+        logger.info("  - Backend from config: '%s'", self.vllm_config.compilation_config.backend)
+        
+        # Check what backend will be used
+        try:
+            backend = self.vllm_config.compilation_config.init_backend(self.vllm_config)
+            logger.info("  - Initialized backend: %s (type: %s)", backend, type(backend).__name__)
+        except Exception as e:
+            logger.warning("  - Could not initialize backend: %s", e)
 
         # NOTE(woosuk): While the executor assigns the TP ranks to the worker
         # process, the ranks can be different from the ranks internally assigned
