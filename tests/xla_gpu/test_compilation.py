@@ -282,7 +282,7 @@ def test_xla_gpu_compilation_simple():
 
     # 设置保守的编译选项， 打印很多dynamo的日志
     # os.environ["TORCH_LOGS"] = "+dynamo"
-    os.environ["TORCH_LOGS"] = "+dynamic"
+    # os.environ["TORCH_LOGS"] = "+dynamic"
     # os.environ["TORCHDYNAMO_VERBOSE"] = "1"
     
     # os.environ["TORCH_CPP_LOG_LEVEL"] = "INFO"
@@ -301,14 +301,14 @@ def test_xla_gpu_compilation_simple():
     )
 
     import torch
-    # 配置dynamo以支持动态形状
-    torch._dynamo.config.capture_dynamic_output_shape_ops = True
-    torch._dynamo.config.assume_static_by_default = False
-    torch._dynamo.config.automatic_dynamic_shapes = True
-    torch._dynamo.config.force_parameter_static_shapes = False
+    # 配置dynamo以支持静态形状（XLA GPU需要静态形状）
+    torch._dynamo.config.capture_dynamic_output_shape_ops = False
+    torch._dynamo.config.assume_static_by_default = True
+    torch._dynamo.config.automatic_dynamic_shapes = False
+    torch._dynamo.config.force_parameter_static_shapes = True
     
-    # 允许动态形状
-    torch._dynamo.config.capture_scalar_outputs = True
+    # 禁用动态形状
+    torch._dynamo.config.capture_scalar_outputs = False
     
     try:
         # Use local model
@@ -321,7 +321,16 @@ def test_xla_gpu_compilation_simple():
             tensor_parallel_size=1,
             data_parallel_size=1,
             gpu_memory_utilization=0.15,
-            compilation_config={"custom_ops": ["none"]},
+            compilation_config={
+                "use_torch_compile": True,
+                "backend": "openxla",
+                "torch_compile_options": {
+                    "backend": "openxla",
+                    "dynamic": False,  # 禁用动态形状
+                    "fullgraph": True,  # 完整图编译
+                    "mode": "reduce-overhead"  # 优化模式
+                }
+            },
             trust_remote_code=True
         )
 
