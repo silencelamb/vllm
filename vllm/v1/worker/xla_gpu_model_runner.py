@@ -1300,22 +1300,26 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
 
         # 配置dynamo以支持动态形状（从TPU实现学习的优化）
         # 这样可以避免为不同的batch size重新编译
-        torch._dynamo.config.capture_dynamic_output_shape_ops = True
-        torch._dynamo.config.assume_static_by_default = False
-        torch._dynamo.config.automatic_dynamic_shapes = True
-        # 关闭形状专门化以避免常量推断
-        torch._dynamo.config.specialize_int = False
-        
-        # 标记动态维度以减少重新编译
-        if self.is_multimodal_model:
-            torch._dynamo.mark_dynamic(inputs_embeds, 0)
-        else:
-            torch._dynamo.mark_dynamic(input_ids, 0)
-        torch._dynamo.mark_dynamic(position_ids, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
-        torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
-        torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
+        # 只在第一次调用时设置，避免重复设置导致冲突
+        if not hasattr(self, '_dynamo_configured'):
+            torch._dynamo.config.capture_dynamic_output_shape_ops = True
+            torch._dynamo.config.assume_static_by_default = False
+            torch._dynamo.config.automatic_dynamic_shapes = True
+            # 关闭形状专门化以避免常量推断
+            torch._dynamo.config.specialize_int = False
+            self._dynamo_configured = True
+            
+            # 标记动态维度以减少重新编译
+            # 只在第一次调用时标记，避免与后续的常量推断冲突
+            if self.is_multimodal_model:
+                torch._dynamo.mark_dynamic(inputs_embeds, 0)
+            else:
+                torch._dynamo.mark_dynamic(input_ids, 0)
+            torch._dynamo.mark_dynamic(position_ids, 0)
+            torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
+            torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
+            torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
+            torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
 
         layer_names = get_layers_from_vllm_config(self.vllm_config, Attention).keys()
         per_layer_attn_metadata = {
