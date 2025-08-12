@@ -109,6 +109,8 @@ try:
         from flash_attn_xla import flash_attn_varlen_func_xla
 
         flash_attn_varlen_func = flash_attn_varlen_func_xla
+        # flash_attn_varlen_func = _flash_attn_varlen_func_orig
+        # reshape_and_cache_flash = _reshape_and_cache_flash_orig
 
         logger.info("Using XLA custom ops for Flash Attention")
     else:
@@ -217,7 +219,7 @@ XLA_GPU_HEAD_SIZE_ALIGNMENT = 8  # Minimal alignment for better performance
 class XlaGpuPagedAttentionBackend(AttentionBackend):
     """XLA GPU PagedAttention Backend using pure tensor operations."""
 
-    accept_output_buffer: bool = True
+    accept_output_buffer: bool = False
 
     @staticmethod
     def get_name() -> str:
@@ -380,9 +382,6 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 output = torch.ones_like(query)
             return output
 
-        # Since accept_output_buffer is True, output should be provided
-        assert output is not None, "Output tensor must be provided."
-
         # Handle output scale
         if output_scale is not None:
             raise NotImplementedError(
@@ -392,6 +391,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # Handle profiling run case
         if attn_metadata is None:
             # Profiling run.
+            output = torch.ones_like(query)
             return output
 
         # Validate input shapes
@@ -413,7 +413,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if self.kv_sharing_target_layer_name is None:
             # Only update cache if not sharing with another layer
             num_actual_tokens = attn_metadata.num_actual_tokens
-            xla_gpu_kv_cache_update(
+            _, _ = xla_gpu_kv_cache_update(
                 key[:num_actual_tokens] if key.shape[0] > num_actual_tokens else key,
                 (
                     value[:num_actual_tokens]
@@ -427,17 +427,21 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 k_scale=getattr(layer, "_k_scale", None),
                 v_scale=getattr(layer, "_v_scale", None),
             )
-
-        # Perform attention computation
-        return xla_gpu_paged_attention_final(
-            query,
-            key_cache,
-            value_cache,
-            attn_metadata,
-            self.scale,
-            layer,
-            output,
-        )
+        
+        # output = xla_gpu_paged_attention_final(
+        #     query,
+        #     key_cache,
+        #     value_cache,
+        #     attn_metadata,
+        #     self.scale,
+        #     layer,
+        # )
+        # output = torch.ones_like(query)
+        #  return output
+        return torch.ops.vllm.unified_attention(
+                    query, key, value, self.layer_name)
+        
+       
 
 
 def xla_gpu_kv_cache_update(
@@ -464,7 +468,7 @@ def xla_gpu_kv_cache_update(
     """
     if FLASH_ATTN_AVAILABLE:
         # Use the function we defined above (either XLA custom op or original)
-        reshape_and_cache_flash(
+        return reshape_and_cache_flash(
             key,
             value,
             key_cache,
@@ -533,7 +537,7 @@ def xla_gpu_paged_attention_final(
             )
 
             # Call the flash attention function (either XLA custom op or original)
-            output = flash_attn_varlen_func(
+            output, lse  = flash_attn_varlen_func(
                 q = query[:num_actual_tokens],  # q
                 k = key_cache,  # k
                 v = value_cache,  # v

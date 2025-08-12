@@ -257,7 +257,7 @@ def test_xla_gpu_compilation_simple():
         
     # Set XLA GPU environment variables
     os.environ["GPU_NUM_DEVICES"] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # Use GPU 3
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # Use GPU 3
     os.environ["PJRT_DEVICE"] = "CUDA"
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
     os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"    

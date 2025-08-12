@@ -163,8 +163,20 @@ def reshape_and_cache_flash(
     kv_cache_dtype: str = "auto",
     k_scale: Optional[torch.Tensor] = None,
     v_scale: Optional[torch.Tensor] = None,
-) -> None:
-    """TPU-style wrapper that uses buffer donor optimization."""
+) -> Tuple [torch.Tensor, torch.Tensor]:
+    """TPU-style wrapper that uses buffer donor optimization.
+       Update KV cache using XLA custom call.
+
+    Args:
+        key: [num_tokens, num_kv_heads, head_size]
+        value: [num_tokens, num_kv_heads, head_size]
+        key_cache: [num_blocks, block_size, num_kv_heads, head_size]
+        value_cache: [num_blocks, block_size, num_kv_heads, head_size]
+        slot_mapping: [num_tokens] - slot indices for each token
+        kv_cache_dtype: KV cache data type
+        k_scale: Optional key scale factor
+        v_scale: Optional value scale factor
+    """
 
     # Mark caches as buffer donors if XLA supports it
     # if hasattr(torch.ops.xla, 'dynamo_set_buffer_donor_'):
