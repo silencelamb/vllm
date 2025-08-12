@@ -244,7 +244,7 @@ class Attention(nn.Module):
                     query, key, value, output, self.layer_name)
             return output.view(-1, hidden_size)
         else:
-            if not self.use_direct_call:
+            if self.use_direct_call:
                 forward_context = get_forward_context()
                 attn_metadata = forward_context.attn_metadata
                 if isinstance(attn_metadata, dict):

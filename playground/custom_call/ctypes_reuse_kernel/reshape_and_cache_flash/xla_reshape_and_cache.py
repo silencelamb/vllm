@@ -146,10 +146,10 @@ def reshape_and_cache_flash_fake(
     key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
     out_k = torch.empty_strided(
-        key_cache.shape, key_cache.stride(), dtype=key_cache.dtype, device="meta"
+        key_cache.shape, key_cache.stride(), dtype=key_cache.dtype, device=key_cache.device
     )
     out_v = torch.empty_strided(
-        value_cache.shape, value_cache.stride(), dtype=value_cache.dtype, device="meta"
+        value_cache.shape, value_cache.stride(), dtype=value_cache.dtype, device=value_cache.device
     )
     return out_k, out_v
 

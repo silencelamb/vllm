@@ -428,20 +428,16 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 v_scale=getattr(layer, "_v_scale", None),
             )
         
-        # output = xla_gpu_paged_attention_final(
-        #     query,
-        #     key_cache,
-        #     value_cache,
-        #     attn_metadata,
-        #     self.scale,
-        #     layer,
-        # )
+        output = xla_gpu_paged_attention_final(
+            query,
+            key_cache,
+            value_cache,
+            attn_metadata,
+            self.scale,
+            layer,
+        )
         # output = torch.ones_like(query)
-        #  return output
-        return torch.ops.vllm.unified_attention(
-                    query, key, value, self.layer_name)
-        
-       
+        return output
 
 
 def xla_gpu_kv_cache_update(

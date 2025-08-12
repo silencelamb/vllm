@@ -199,9 +199,9 @@ def flash_attn_varlen_op_fake(
     seqused_k,
     block_table,
 ):
-    out = torch.empty_strided(q.shape, q.stride(), dtype=q.dtype, device="meta")
+    out = torch.empty_strided(q.shape, q.stride(), dtype=q.dtype, device=q.device)
     softmax_lse = torch.empty_strided(
-        [q.shape[1], q.shape[0]], [1, q.shape[1]], dtype=torch.float32, device="meta"
+        [q.shape[1], q.shape[0]], [1, q.shape[1]], dtype=torch.float32, device=q.device
     )
     return out, softmax_lse
 

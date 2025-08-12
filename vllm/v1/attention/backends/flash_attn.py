@@ -487,6 +487,16 @@ class FlashAttentionImpl(AttentionImpl):
         # performance to make sure it does not introduce any overhead.
 
         num_actual_tokens = attn_metadata.num_actual_tokens
+        # Handle profiling run case
+        if attn_metadata is None:
+            # Profiling run.
+            output = torch.ones_like(query)
+            return output
+        if kv_cache.numel() == 0:
+            if output is None:
+                output = torch.ones_like(query)
+            return output
+        
         key_cache, value_cache = kv_cache.unbind(0)
 
         if self.kv_sharing_target_layer_name is None:

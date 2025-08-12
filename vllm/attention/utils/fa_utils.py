@@ -68,4 +68,4 @@ def flash_attn_supports_fp8() -> bool:
 
 
 def is_flash_attn_varlen_func_available() -> bool:
-    return current_platform.is_cuda() or current_platform.is_xpu()
+    return current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_xla_gpu()

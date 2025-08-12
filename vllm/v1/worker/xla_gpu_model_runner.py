@@ -1700,7 +1700,7 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
 
                     xla_gpu_kv_cache = torch.zeros(kv_cache_shape,
                                                    dtype=dtype).to(self.device)
-
+                    logger.info(f"initialize_kv_cache: {layer_name}, shape: {kv_cache_shape}")
                     kv_caches[layer_name] = xla_gpu_kv_cache
                 else:
                     raise NotImplementedError

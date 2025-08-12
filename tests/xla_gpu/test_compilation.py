@@ -284,9 +284,9 @@ def test_xla_gpu_compilation_simple():
     os.environ["VLLM_ENGINE_USE_RAY"] = "0"
 
     # 设置保守的编译选项， 打印很多dynamo的日志
-    # os.environ["TORCH_LOGS"] = "+dynamo"
+    os.environ["TORCH_LOGS"] = "+dynamo"
     # os.environ["TORCH_LOGS"] = "+dynamo,+dynamic"
-    os.environ["TORCH_LOGS"] = "+graph_breaks"
+    # os.environ["TORCH_LOGS"] = "+graph_breaks"
     # os.environ["TORCHDYNAMO_VERBOSE"] = "1"
     
     # os.environ["TORCH_CPP_LOG_LEVEL"] = "INFO"
