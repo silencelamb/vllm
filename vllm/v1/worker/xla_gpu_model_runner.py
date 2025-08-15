@@ -126,7 +126,6 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         self.device = device
         self.check_recompilation = envs.VLLM_XLA_CHECK_RECOMPILATION
 
-        torch._dynamo.config.capture_dynamic_output_shape_ops = True
         # SPMD Related - XLA GPU supports SPMD differently than TPU
         self.use_spmd = envs.VLLM_XLA_USE_SPMD
         if self.use_spmd:
@@ -1254,10 +1253,10 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         # 使用实际的上下文长度，而不是固定值
         MAX_CONTEXT_LEN = num_tokens
         
-        torch._dynamo.config.capture_dynamic_output_shape_ops = True
-        torch._dynamo.config.assume_static_by_default = False
-        torch._dynamo.config.automatic_dynamic_shapes = True
-        torch._dynamo.config.specialize_int = False
+        # torch._dynamo.config.capture_dynamic_output_shape_ops = True
+        # torch._dynamo.config.assume_static_by_default = False
+        # torch._dynamo.config.automatic_dynamic_shapes = True
+        # torch._dynamo.config.specialize_int = False
         
         if self.is_multimodal_model:
             input_ids = None

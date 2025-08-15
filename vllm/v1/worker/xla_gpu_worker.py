@@ -82,6 +82,8 @@ class XlaGpuWorker:
             # note: lazy import to avoid importing torch before initializing
             from vllm.utils import init_cached_hf_modules
             init_cached_hf_modules()
+        
+        torch._dynamo.config.cache_size_limit = 128
 
         # XLA GPU profiling setup
         self.profiler = None

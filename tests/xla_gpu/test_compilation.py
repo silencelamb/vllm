@@ -289,6 +289,7 @@ def test_xla_gpu_compilation_simple():
 
     # 设置保守的编译选项， 打印很多dynamo的日志
     # os.environ["TORCH_LOGS"] = "+dynamo"
+    os.environ["TORCH_LOGS"] = "+dynamic"
     # os.environ["TORCH_LOGS"] = "+dynamo,+dynamic"
     # os.environ["TORCH_LOGS"] = "+graph_breaks"
     # os.environ["TORCHDYNAMO_VERBOSE"] = "1"
@@ -309,13 +310,13 @@ def test_xla_gpu_compilation_simple():
 
     import torch
     # 配置dynamo以支持动态形状
-    torch._dynamo.config.capture_dynamic_output_shape_ops = True
-    torch._dynamo.config.assume_static_by_default = False
-    torch._dynamo.config.automatic_dynamic_shapes = True
-    torch._dynamo.config.force_parameter_static_shapes = False
+    # torch._dynamo.config.capture_dynamic_output_shape_ops = True
+    # torch._dynamo.config.assume_static_by_default = False
+    # torch._dynamo.config.automatic_dynamic_shapes = True
+    # torch._dynamo.config.force_parameter_static_shapes = False
     
     # 允许动态形状
-    torch._dynamo.config.capture_scalar_outputs = True
+    # torch._dynamo.config.capture_scalar_outputs = True
     
     
     try:
@@ -334,11 +335,11 @@ def test_xla_gpu_compilation_simple():
                 "use_inductor": False,
                 "use_cudagraph": False,
                 "backend": "openxla",
-                "dynamic": True, 
+                "dynamic": False, 
                 "torch_compile_options": {
                     "backend": "openxla",
-                    "dynamic": True,  # Enable dynamic shapes
-                    "fullgraph": False,  # Allow graph breaks for dynamic shapes
+                    "dynamic": False,  # Enable dynamic shapes
+                    "fullgraph": True,  # Allow graph breaks for dynamic shapes
                 }
             },
             trust_remote_code=True
