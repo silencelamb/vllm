@@ -21,6 +21,8 @@ Usage:
 
 import glob
 import os
+os.environ["XLA_FLAGS"] = "--xla_dump_to=./xla_dump/"
+# os.environ["XLA_DYNAMO_DEBUG"]="1"
 import shutil
 import tempfile
 
@@ -250,6 +252,8 @@ def test_xla_gpu_compilation_simple():
     
     # 强制使用特定的启动方法
     os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"  # 使用 spawn 而不是 fork
+    # os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "fork"  
+    # os.environ["VLLM_USE_RAY_COMPILED_DAG"] = "0"
     
     # 设置进程相关环境变量
     # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # 同步 CUDA 启动
@@ -270,7 +274,7 @@ def test_xla_gpu_compilation_simple():
     # 确保XLA编译是同步的, xla_gpu_force_compilation_parallelism
     
     # 添加XLA调试信息
-    # os.environ["XLA_FLAGS"] = "--xla_dump_to=./xla_dump/--xla_gpu_force_compilation_parallelism=1"
+    os.environ["XLA_FLAGS"] = "--xla_dump_to=./xla_dump/"
     # os.environ["XLA_HLO_DEBUG"] = "1"
     # os.environ["XLA_IR_DEBUG"] = "1"
     # os.environ["XLA_SAVE_TENSORS_FILE"] = "/tmp/xla_tensors.txt"
@@ -284,7 +288,7 @@ def test_xla_gpu_compilation_simple():
     os.environ["VLLM_ENGINE_USE_RAY"] = "0"
 
     # 设置保守的编译选项， 打印很多dynamo的日志
-    os.environ["TORCH_LOGS"] = "+dynamo"
+    # os.environ["TORCH_LOGS"] = "+dynamo"
     # os.environ["TORCH_LOGS"] = "+dynamo,+dynamic"
     # os.environ["TORCH_LOGS"] = "+graph_breaks"
     # os.environ["TORCHDYNAMO_VERBOSE"] = "1"

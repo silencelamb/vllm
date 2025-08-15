@@ -85,6 +85,8 @@ try:
         flash_attn_xla, xla_reshape_and_cache = import_xla_custom_ops()
         XLA_CUSTOM_OPS_AVAILABLE = True
         logger.info("XLA custom ops successfully loaded")
+        logger.info(f"{flash_attn_xla}")
+        logger.info(f"{xla_reshape_and_cache}")
 except Exception as e:
     logger.warning(f"Failed to load XLA custom ops: {e}")
     flash_attn_xla = None
@@ -362,6 +364,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         assert (
             self.num_heads % self.num_kv_heads == 0
         ), "num_heads must be divisible by num_kv_heads"
+        logger.info('using XlaGpuPagedAttentionBackendImpl')
 
     def forward(
         self,
@@ -415,11 +418,12 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             num_actual_tokens = attn_metadata.num_actual_tokens
             _, _ = xla_gpu_kv_cache_update(
                 key[:num_actual_tokens] if key.shape[0] > num_actual_tokens else key,
-                (
-                    value[:num_actual_tokens]
-                    if value.shape[0] > num_actual_tokens
-                    else value
-                ),
+                # (
+                #     value[:num_actual_tokens]
+                #     if value.shape[0] > num_actual_tokens
+                #     else value
+                # ),
+                value[:num_actual_tokens],
                 key_cache,
                 value_cache,
                 attn_metadata.slot_mapping,
@@ -428,15 +432,22 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 v_scale=getattr(layer, "_v_scale", None),
             )
         
-        output = xla_gpu_paged_attention_final(
-            query,
-            key_cache,
-            value_cache,
-            attn_metadata,
-            self.scale,
-            layer,
-        )
-        # output = torch.ones_like(query)
+        # output = xla_gpu_paged_attention_final(
+        #     query,
+        #     key_cache,
+        #     value_cache,
+        #     attn_metadata,
+        #     self.scale,
+        #     layer,
+        # )
+        output = torch.ones_like(query)
+        # Add small dependency on both key_cache and value_cache
+        if key_cache.numel() > 0:
+            # Use first few elements to create dependency
+            key_dep = key_cache.flatten()[:min(10, key_cache.numel())].sum() * 1e-10
+            val_dep = value_cache.flatten()[:min(10, value_cache.numel())].sum() * 1e-10
+            output = output + key_dep + val_dep
+
         return output
 
 
