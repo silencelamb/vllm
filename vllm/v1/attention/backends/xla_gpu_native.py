@@ -364,7 +364,6 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         assert (
             self.num_heads % self.num_kv_heads == 0
         ), "num_heads must be divisible by num_kv_heads"
-        logger.info('using XlaGpuPagedAttentionBackendImpl')
 
     def forward(
         self,
@@ -417,12 +416,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             # Only update cache if not sharing with another layer
             num_actual_tokens = attn_metadata.num_actual_tokens
             _, _ = xla_gpu_kv_cache_update(
-                key[:num_actual_tokens] if key.shape[0] > num_actual_tokens else key,
-                # (
-                #     value[:num_actual_tokens]
-                #     if value.shape[0] > num_actual_tokens
-                #     else value
-                # ),
+                key[:num_actual_tokens],
                 value[:num_actual_tokens],
                 key_cache,
                 value_cache,

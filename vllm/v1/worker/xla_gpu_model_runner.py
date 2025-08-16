@@ -1316,15 +1316,15 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         
         # 标记动态维度（在_dummy_run中标记，确保编译时识别为动态）
         # 这是从能跑通的GitHub版本学到的关键点
-        # if self.is_multimodal_model:
-        #     torch._dynamo.mark_dynamic(inputs_embeds, 0)
-        # else:
-        #     torch._dynamo.mark_dynamic(input_ids, 0)
-        # torch._dynamo.mark_dynamic(position_ids, 0)
-        # torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
-        # torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
-        # torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
-        # torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
+        if self.is_multimodal_model:
+            torch._dynamo.mark_dynamic(inputs_embeds, 0)
+        else:
+            torch._dynamo.mark_dynamic(input_ids, 0)
+        torch._dynamo.mark_dynamic(position_ids, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.slot_mapping, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.block_table, (0, 1))
+        torch._dynamo.mark_dynamic(attn_metadata.seq_lens, 0)
+        torch._dynamo.mark_dynamic(attn_metadata.query_start_loc, 0)
 
         layer_names = get_layers_from_vllm_config(self.vllm_config, Attention).keys()
         per_layer_attn_metadata = {
