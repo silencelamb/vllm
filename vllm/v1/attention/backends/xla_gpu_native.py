@@ -613,3 +613,440 @@ def _pytorch_kv_cache_update(
 # xla_gpu_paged_attention.so which implements:
 # - XlaGpuPagedAttentionFlash: Calls flash_attn_varlen_func internally
 # - XlaGpuKVCacheUpdate: Calls reshape_and_cache_flash internally
+
+
+if __name__ == "__main__":
+    """Test xla_gpu_kv_cache_update and xla_gpu_paged_attention_final with torch.compile."""
+    import sys
+    import traceback
+    
+    # Set up XLA environment for torch.compile
+    import os
+    os.environ["PJRT_DEVICE"] = "CUDA"
+    os.environ["GPU_NUM_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    os.environ["XLA_FLAGS"] = "--xla_dump_to=./xla_dump/"
+    
+    import torch
+    import torch._dynamo
+    import torch_xla
+    import torch_xla.core.xla_model as xm
+    
+    print("=" * 60)
+    print("XLA GPU torch.compile Test Cases")
+    print("=" * 60)
+    
+    # Get XLA device
+    device = xm.xla_device()
+    print(f"✓ XLA device initialized: {device}")
+    print(f"  Device type: {device.type}")
+    print(f"  Using torch.compile with backend='openxla'")
+    
+    # Test parameters - using fixed sizes for some dimensions
+    batch_size = 2
+    num_tokens = 8  # This will be marked as dynamic
+    num_heads = 4
+    num_kv_heads = 2  # For GQA
+    head_size = 64
+    num_blocks = 16
+    block_size = 16
+    max_seq_len = 128
+    
+    print(f"\nTest Configuration:")
+    print(f"  Batch size: {batch_size}")
+    print(f"  Num tokens: {num_tokens} (will be marked dynamic)")
+    print(f"  Num heads: {num_heads} (KV heads: {num_kv_heads})")
+    print(f"  Head size: {head_size}")
+    print(f"  Cache blocks: {num_blocks} x {block_size}")
+    
+    def test_xla_gpu_kv_cache_update():
+        """Test the xla_gpu_kv_cache_update function with torch.compile."""
+        print("\n" + "-" * 50)
+        print("Test 1: xla_gpu_kv_cache_update with torch.compile")
+        print("-" * 50)
+        
+        try:
+            # Define the wrapped function for compilation
+            def kv_cache_update_wrapper(key, value, key_cache, value_cache, slot_mapping):
+                """Wrapper function that will be compiled."""
+                # Mark dynamic dimensions
+                torch._dynamo.mark_dynamic(key, 0)  # num_tokens dimension
+                torch._dynamo.mark_dynamic(value, 0)
+                torch._dynamo.mark_dynamic(slot_mapping, 0)
+                
+                # Call the actual function
+                return xla_gpu_kv_cache_update(
+                    key=key,
+                    value=value,
+                    key_cache=key_cache,
+                    value_cache=value_cache,
+                    slot_mapping=slot_mapping,
+                    kv_cache_dtype="auto",
+                    k_scale=None,
+                    v_scale=None,
+                )
+            
+            # Compile the wrapper with openxla backend
+            print("Compiling kv_cache_update with backend='openxla'...")
+            compiled_fn = torch.compile(
+                kv_cache_update_wrapper,
+                backend='openxla',
+                fullgraph=True,
+                dynamic=False,  # We manually mark dynamic dims
+            )
+            
+            # Test with different token counts to verify dynamic shapes
+            test_token_counts = [4, 8, 12]
+            
+            for token_count in test_token_counts:
+                print(f"\nTesting with {token_count} tokens:")
+                
+                # Create test tensors on XLA device
+                key = torch.randn(token_count, num_kv_heads, head_size, device=device)
+                value = torch.randn(token_count, num_kv_heads, head_size, device=device)
+                
+                # Initialize KV caches
+                key_cache = torch.zeros(
+                    num_blocks, block_size, num_kv_heads, head_size, device=device
+                )
+                value_cache = torch.zeros(
+                    num_blocks, block_size, num_kv_heads, head_size, device=device
+                )
+                
+                # Create slot mapping
+                slot_mapping = torch.arange(token_count, dtype=torch.long, device=device)
+                
+                print(f"  Input shapes: key={key.shape}, slot_mapping={slot_mapping.shape}")
+                
+                # Call compiled function
+                updated_key_cache, updated_value_cache = compiled_fn(
+                    key, value, key_cache, value_cache, slot_mapping
+                )
+                
+                # Sync XLA execution
+                xm.mark_step()
+                
+                print(f"  ✓ Compiled function executed successfully")
+                print(f"    Output shapes: key_cache={updated_key_cache.shape}, value_cache={updated_value_cache.shape}")
+                
+                # Basic validation
+                assert updated_key_cache.shape == key_cache.shape
+                assert updated_value_cache.shape == value_cache.shape
+            
+            print("\n✓ Test 1 PASSED - Dynamic shapes handled correctly")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Test 1 FAILED: {e}")
+            traceback.print_exc()
+            return False
+    
+    def test_xla_gpu_paged_attention_final():
+        """Test the xla_gpu_paged_attention_final function with torch.compile."""
+        print("\n" + "-" * 50)
+        print("Test 2: xla_gpu_paged_attention_final with torch.compile")
+        print("-" * 50)
+        
+        try:
+            # Create a mock layer class
+            class MockLayer:
+                def __init__(self):
+                    self._k_scale = None
+                    self._v_scale = None
+            
+            # Define the wrapped function for compilation
+            def paged_attention_wrapper(query, key_cache, value_cache, 
+                                       query_start_loc, seq_lens, block_table, 
+                                       slot_mapping, num_actual_tokens):
+                """Wrapper function that will be compiled."""
+                # Mark dynamic dimensions
+                torch._dynamo.mark_dynamic(query, 0)  # num_tokens dimension
+                torch._dynamo.mark_dynamic(query_start_loc, 0)  # batch dimension + 1
+                torch._dynamo.mark_dynamic(seq_lens, 0)  # batch dimension
+                torch._dynamo.mark_dynamic(slot_mapping, 0)  # num_tokens dimension
+                
+                # Create metadata inside the compiled function
+                metadata = XlaGpuPagedMetadata(
+                    num_actual_tokens=num_actual_tokens,
+                    max_query_len=query.shape[0],  # Use actual query length
+                    query_start_loc=query_start_loc,
+                    max_seq_len=max_seq_len,
+                    seq_lens=seq_lens,
+                    block_table=block_table,
+                    slot_mapping=slot_mapping,
+                    seq_lens_tensor=seq_lens,
+                    block_tables=block_table,
+                )
+                
+                # Call the actual function
+                return xla_gpu_paged_attention_final(
+                    query=query,
+                    key_cache=key_cache,
+                    value_cache=value_cache,
+                    attn_metadata=metadata,
+                    softmax_scale=1.0 / (head_size ** 0.5),
+                    layer=MockLayer(),
+                    output=None,
+                )
+            
+            # Compile the wrapper with openxla backend
+            print("Compiling paged_attention with backend='openxla'...")
+            compiled_fn = torch.compile(
+                paged_attention_wrapper,
+                backend='openxla',
+                fullgraph=True,
+                dynamic=False,  # We manually mark dynamic dims
+            )
+            
+            # Prepare static caches (these don't change across calls)
+            key_cache = torch.randn(
+                num_blocks, block_size, num_kv_heads, head_size, device=device
+            ) * 0.1
+            value_cache = torch.randn(
+                num_blocks, block_size, num_kv_heads, head_size, device=device
+            ) * 0.1
+            
+            # Test with different token counts
+            test_configs = [
+                (4, 1),  # 4 tokens, 1 sequence
+                (8, 2),  # 8 tokens, 2 sequences
+                (6, 1),  # 6 tokens, 1 sequence
+            ]
+            
+            for token_count, batch_count in test_configs:
+                print(f"\nTesting with {token_count} tokens, {batch_count} sequence(s):")
+                
+                # Create query tensor
+                query = torch.randn(token_count, num_heads, head_size, device=device)
+                
+                # Create metadata tensors
+                if batch_count == 1:
+                    seq_lens = torch.tensor([token_count], dtype=torch.long, device=device)
+                    query_start_loc = torch.tensor([0, token_count], dtype=torch.long, device=device)
+                else:
+                    # Split tokens between sequences
+                    tokens_per_seq = token_count // batch_count
+                    seq_lens = torch.full((batch_count,), tokens_per_seq, dtype=torch.long, device=device)
+                    query_start_loc = torch.arange(0, token_count + 1, tokens_per_seq, 
+                                                  dtype=torch.long, device=device)
+                
+                # Create block table
+                max_blocks_per_seq = 8
+                block_table = torch.zeros(
+                    batch_count, max_blocks_per_seq, dtype=torch.long, device=device
+                )
+                for i in range(batch_count):
+                    blocks_needed = (seq_lens[i].item() + block_size - 1) // block_size
+                    block_table[i, :blocks_needed] = torch.arange(i * blocks_needed, 
+                                                                 (i + 1) * blocks_needed)
+                
+                # Create slot mapping
+                slot_mapping = torch.arange(token_count, dtype=torch.long, device=device)
+                
+                print(f"  Input shapes: query={query.shape}, seq_lens={seq_lens.shape}")
+                
+                # Call compiled function
+                result = compiled_fn(
+                    query, key_cache, value_cache,
+                    query_start_loc, seq_lens, block_table,
+                    slot_mapping, token_count
+                )
+                
+                # Sync XLA execution
+                xm.mark_step()
+                
+                print(f"  ✓ Compiled function executed successfully")
+                print(f"    Output shape: {result.shape}")
+                
+                # Basic validation
+                assert result.shape == query.shape, f"Shape mismatch: {result.shape} != {query.shape}"
+            
+            print("\n✓ Test 2 PASSED - Dynamic shapes handled correctly")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Test 2 FAILED: {e}")
+            traceback.print_exc()
+            return False
+    
+    def test_integration():
+        """Test both functions together with torch.compile in a realistic scenario."""
+        print("\n" + "-" * 50)
+        print("Test 3: Integration Test with torch.compile")
+        print("-" * 50)
+        
+        try:
+            # Define a complete attention pipeline for compilation
+            class AttentionPipeline:
+                def __init__(self, num_kv_heads, head_size):
+                    self.num_kv_heads = num_kv_heads
+                    self.head_size = head_size
+                    self.softmax_scale = 1.0 / (head_size ** 0.5)
+                
+                def forward(self, key, value, query, key_cache, value_cache, 
+                           slot_mapping, seq_lens, query_start_loc, block_table):
+                    """Complete attention pipeline."""
+                    # Mark dynamic dimensions
+                    torch._dynamo.mark_dynamic(key, 0)
+                    torch._dynamo.mark_dynamic(value, 0)
+                    torch._dynamo.mark_dynamic(query, 0)
+                    torch._dynamo.mark_dynamic(slot_mapping, 0)
+                    torch._dynamo.mark_dynamic(seq_lens, 0)
+                    torch._dynamo.mark_dynamic(query_start_loc, 0)
+                    
+                    # Update KV cache
+                    updated_key_cache, updated_value_cache = xla_gpu_kv_cache_update(
+                        key=key,
+                        value=value,
+                        key_cache=key_cache,
+                        value_cache=value_cache,
+                        slot_mapping=slot_mapping,
+                        kv_cache_dtype="auto",
+                        k_scale=None,
+                        v_scale=None,
+                    )
+                    
+                    # Create metadata for attention
+                    metadata = XlaGpuPagedMetadata(
+                        num_actual_tokens=query.shape[0],
+                        max_query_len=query.shape[0],
+                        query_start_loc=query_start_loc,
+                        max_seq_len=seq_lens.max().item(),
+                        seq_lens=seq_lens,
+                        block_table=block_table,
+                        slot_mapping=slot_mapping,
+                    )
+                    
+                    # Mock layer
+                    class MockLayer:
+                        def __init__(self):
+                            self._k_scale = None
+                            self._v_scale = None
+                    
+                    # Compute attention
+                    output = xla_gpu_paged_attention_final(
+                        query=query,
+                        key_cache=updated_key_cache,
+                        value_cache=updated_value_cache,
+                        attn_metadata=metadata,
+                        softmax_scale=self.softmax_scale,
+                        layer=MockLayer(),
+                    )
+                    
+                    return output, updated_key_cache, updated_value_cache
+            
+            # Create and compile the pipeline
+            print("Creating and compiling attention pipeline...")
+            pipeline = AttentionPipeline(num_kv_heads, head_size)
+            compiled_pipeline = torch.compile(
+                pipeline.forward,
+                backend='openxla',
+                fullgraph=True,
+                dynamic=False,
+            )
+            
+            # Initialize caches
+            key_cache = torch.zeros(
+                num_blocks, block_size, num_kv_heads, head_size, device=device
+            )
+            value_cache = torch.zeros(
+                num_blocks, block_size, num_kv_heads, head_size, device=device
+            )
+            
+            # Test scenario: prefill then decode
+            print("\nScenario: Prefill (4 tokens) -> Decode (1 token) -> Decode (1 token)")
+            
+            # Step 1: Prefill
+            prefill_tokens = 4
+            key_prefill = torch.randn(prefill_tokens, num_kv_heads, head_size, device=device)
+            value_prefill = torch.randn(prefill_tokens, num_kv_heads, head_size, device=device)
+            query_prefill = torch.randn(prefill_tokens, num_heads, head_size, device=device)
+            slot_mapping_prefill = torch.arange(prefill_tokens, dtype=torch.long, device=device)
+            
+            seq_lens = torch.tensor([prefill_tokens], dtype=torch.long, device=device)
+            query_start_loc = torch.tensor([0, prefill_tokens], dtype=torch.long, device=device)
+            block_table = torch.zeros(1, 8, dtype=torch.long, device=device)
+            block_table[0, 0] = 0
+            
+            print(f"\nStep 1: Prefill with {prefill_tokens} tokens")
+            output, key_cache, value_cache = compiled_pipeline(
+                key_prefill, value_prefill, query_prefill,
+                key_cache, value_cache, slot_mapping_prefill,
+                seq_lens, query_start_loc, block_table
+            )
+            xm.mark_step()
+            print(f"  ✓ Prefill complete, output shape: {output.shape}")
+            
+            # Step 2: First decode
+            decode_tokens = 1
+            current_seq_len = prefill_tokens + 1
+            
+            key_decode = torch.randn(decode_tokens, num_kv_heads, head_size, device=device)
+            value_decode = torch.randn(decode_tokens, num_kv_heads, head_size, device=device)
+            query_decode = torch.randn(decode_tokens, num_heads, head_size, device=device)
+            slot_mapping_decode = torch.tensor([prefill_tokens], dtype=torch.long, device=device)
+            
+            seq_lens = torch.tensor([current_seq_len], dtype=torch.long, device=device)
+            query_start_loc = torch.tensor([0, decode_tokens], dtype=torch.long, device=device)
+            
+            print(f"\nStep 2: First decode ({decode_tokens} token)")
+            output, key_cache, value_cache = compiled_pipeline(
+                key_decode, value_decode, query_decode,
+                key_cache, value_cache, slot_mapping_decode,
+                seq_lens, query_start_loc, block_table
+            )
+            xm.mark_step()
+            print(f"  ✓ Decode complete, output shape: {output.shape}")
+            
+            # Step 3: Second decode (testing reuse of compiled graph)
+            current_seq_len += 1
+            slot_mapping_decode2 = torch.tensor([current_seq_len - 1], dtype=torch.long, device=device)
+            seq_lens = torch.tensor([current_seq_len], dtype=torch.long, device=device)
+            
+            print(f"\nStep 3: Second decode ({decode_tokens} token) - reusing compiled graph")
+            output, key_cache, value_cache = compiled_pipeline(
+                key_decode, value_decode, query_decode,  # Reuse same shape tensors
+                key_cache, value_cache, slot_mapping_decode2,
+                seq_lens, query_start_loc, block_table
+            )
+            xm.mark_step()
+            print(f"  ✓ Decode complete, output shape: {output.shape}")
+            
+            print("\n✓ Test 3 PASSED - Integration test successful")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Test 3 FAILED: {e}")
+            traceback.print_exc()
+            return False
+    
+    # Run all tests
+    print("\nRunning test suite...")
+    results = []
+    
+    # Test 1: KV Cache Update
+    results.append(("KV Cache Update", test_xla_gpu_kv_cache_update()))
+    
+    # Test 2: Paged Attention
+    results.append(("Paged Attention", test_xla_gpu_paged_attention_final()))
+    
+    # Test 3: Integration
+    results.append(("Integration", test_integration()))
+    
+    # Summary
+    print("\n" + "=" * 60)
+    print("TEST SUMMARY")
+    print("=" * 60)
+    
+    for test_name, passed in results:
+        status = "✓ PASSED" if passed else "✗ FAILED"
+        print(f"  {test_name:.<40} {status}")
+    
+    all_passed = all(result[1] for result in results)
+    if all_passed:
+        print("\n✓ All tests passed!")
+        sys.exit(0)
+    else:
+        print("\n✗ Some tests failed!")
+        sys.exit(1)
