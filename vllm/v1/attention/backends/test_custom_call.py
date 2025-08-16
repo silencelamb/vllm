@@ -217,6 +217,12 @@ def flash_attn_varlen_impl(
     descriptor_str = f"{batch_size}|{max_seqlen_q}|{max_seqlen_k}|{num_heads}|{num_heads_k}|{head_size}|{total_q}|{total_k}|{softmax_scale}|{int(is_causal)}|{window_size[0]}|{window_size[1]}|{softcap}|{int(has_block_table)}|{int(has_seqused_k)}|{block_size}|{max_blocks_per_seq}"
     descriptor = descriptor_str.encode("utf-8")
 
+    # Ensure cu_seqlens_k is not None (required for XLA custom call)
+    if cu_seqlens_k is None:
+        # For paged attention, create a dummy cu_seqlens_k
+        # It's not used but must be a valid tensor
+        cu_seqlens_k = torch.tensor([0, max_seqlen_k * batch_size], dtype=torch.int32, device=q.device)
+    
     # Prepare buffers
     buffers = [q, k, v, cu_seqlens_q, cu_seqlens_k]
 
@@ -578,22 +584,29 @@ if __name__ == "__main__":
                     if metadata.block_tables is not None
                     else metadata.block_table
                 )
-                # Call the actual function
+                # For paged attention, cu_seqlens_k is not used but still needs to be provided
+                # Create a dummy cu_seqlens_k tensor if None
+                if metadata.query_start_loc is not None:
+                    cu_seqlens_k = metadata.query_start_loc.to(dtype=torch.int32)  # Convert to int32
+                else:
+                    cu_seqlens_k = torch.tensor([0, metadata.max_seq_len], dtype=torch.int32, device=query.device)
+                
+                # Call the actual function with correct parameter order
                 return torch.ops.xla.flash_attn_varlen_op(
-                    q = query,  # q
-                    k = key_cache,  # k
-                    v = value_cache,  # v
-                    cu_seqlens_q = metadata.query_start_loc,  # cu_seqlens_q
-                    cu_seqlens_k = None, # only used for non-paged prefill
-                    max_seqlen_q = metadata.max_query_len,  # max_seqlen_q
-                    max_seqlen_k = metadata.max_seq_len,  # max_seqlen_k
-                    softmax_scale = 1.0 / (head_size ** 0.5),  # softmax_scale
-                    is_causal = True,  # is_causal
-                    window_left = -1,
-                    window_right = -1,  # window_size
-                    softcap = 0.0,  # softcap
-                    seqused_k = seq_lens_to_use,  # seqused_k
-                    block_table = block_table_to_use,  # block_table
+                    query,  # q
+                    key_cache,  # k  
+                    value_cache,  # v
+                    metadata.query_start_loc,  # cu_seqlens_q
+                    cu_seqlens_k,  # cu_seqlens_k (required even if not used)
+                    metadata.max_query_len,  # max_seqlen_q
+                    metadata.max_seq_len,  # max_seqlen_k
+                    1.0 / (head_size ** 0.5),  # softmax_scale
+                    True,  # is_causal
+                    -1,  # window_left
+                    -1,  # window_right
+                    0.0,  # softcap
+                    seq_lens_to_use,  # seqused_k
+                    block_table_to_use,  # block_table
                 )
             
             # Compile the wrapper with openxla backend
@@ -628,19 +641,19 @@ if __name__ == "__main__":
                 
                 # Create metadata tensors
                 if batch_count == 1:
-                    seq_lens = torch.tensor([token_count], dtype=torch.long, device=device)
-                    query_start_loc = torch.tensor([0, token_count], dtype=torch.long, device=device)
+                    seq_lens = torch.tensor([token_count], dtype=torch.int32, device=device)
+                    query_start_loc = torch.tensor([0, token_count], dtype=torch.int32, device=device)
                 else:
                     # Split tokens between sequences
                     tokens_per_seq = token_count // batch_count
-                    seq_lens = torch.full((batch_count,), tokens_per_seq, dtype=torch.long, device=device)
+                    seq_lens = torch.full((batch_count,), tokens_per_seq, dtype=torch.int32, device=device)
                     query_start_loc = torch.arange(0, token_count + 1, tokens_per_seq, 
-                                                  dtype=torch.long, device=device)
+                                                  dtype=torch.int32, device=device)
                 
                 # Create block table
                 max_blocks_per_seq = 8
                 block_table = torch.zeros(
-                    batch_count, max_blocks_per_seq, dtype=torch.long, device=device
+                    batch_count, max_blocks_per_seq, dtype=torch.int32, device=device
                 )
                 for i in range(batch_count):
                     blocks_needed = (seq_lens[i].item() + block_size - 1) // block_size
