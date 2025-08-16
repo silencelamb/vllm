@@ -39,7 +39,7 @@ def setup_custom_call_flash_attn():
     torch_xla._XLAC._xla_register_custom_call_target(
         "flash_attn_varlen", capsule, "CUDA"
     )
-    print("✓ Custom call registered")
+    print("✓ Custom call flash_attn_varlen_xla registered")
 
 def setup_custom_call_reshape_and_cache():
     """Compile and register the custom call."""
@@ -61,7 +61,7 @@ def setup_custom_call_reshape_and_cache():
         capsule,
         "CUDA"
     )
-    print("✓ Custom call registered")
+    print("✓ Custom call reshape_and_cache_flash registered")
     
 
 setup_custom_call_reshape_and_cache()
@@ -550,11 +550,6 @@ if __name__ == "__main__":
         print("-" * 50)
         
         try:
-            # Create a mock layer class
-            class MockLayer:
-                def __init__(self):
-                    self._k_scale = None
-                    self._v_scale = None
             
             # Define the wrapped function for compilation
             def paged_attention_wrapper(query, key_cache, value_cache, 
