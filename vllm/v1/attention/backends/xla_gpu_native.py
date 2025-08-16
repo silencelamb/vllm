@@ -87,6 +87,19 @@ try:
         logger.info("XLA custom ops successfully loaded")
         logger.info(f"{flash_attn_xla}")
         logger.info(f"{xla_reshape_and_cache}")
+        # 在 setup_custom_call() 后添加
+        logger.debug("DEBUG: Checking registered ops...")
+        logger.debug(f"  torch.ops.xla exists: {hasattr(torch.ops, 'xla')}")
+        if hasattr(torch.ops, 'xla'):
+            logger.debug(f"  Available xla ops: {dir(torch.ops.xla)}")
+            logger.debug(f"  reshape_and_cache_flash exists: {hasattr(torch.ops.xla, 'reshape_and_cache_flash')}")
+            logger.debug(f"  flash_attn_varlen_op exists: {hasattr(torch.ops.xla, 'flash_attn_varlen_op')}")
+
+        # 测试调用
+        if hasattr(torch.ops.xla, 'reshape_and_cache_flash'):
+            print("  ✓ torch.ops.xla.reshape_and_cache_flash is callable")
+        if hasattr(torch.ops.xla, 'flash_attn_varlen_op'):
+            print("  ✓ torch.ops.xla.flash_attn_varlen_op is callable")
 except Exception as e:
     logger.warning(f"Failed to load XLA custom ops: {e}")
     flash_attn_xla = None
@@ -426,21 +439,21 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 v_scale=getattr(layer, "_v_scale", None),
             )
         
-        # output = xla_gpu_paged_attention_final(
-        #     query,
-        #     key_cache,
-        #     value_cache,
-        #     attn_metadata,
-        #     self.scale,
-        #     layer,
-        # )
-        output = torch.ones_like(query)
-        # Add small dependency on both key_cache and value_cache
-        if key_cache.numel() > 0:
-            # Use first few elements to create dependency
-            key_dep = key_cache.flatten()[:min(10, key_cache.numel())].sum() * 1e-10
-            val_dep = value_cache.flatten()[:min(10, value_cache.numel())].sum() * 1e-10
-            output = output + key_dep + val_dep
+        output = xla_gpu_paged_attention_final(
+            query,
+            key_cache,
+            value_cache,
+            attn_metadata,
+            self.scale,
+            layer,
+        )
+        # output = torch.ones_like(query)
+        # # Add small dependency on both key_cache and value_cache
+        # if key_cache.numel() > 0:
+        #     # Use first few elements to create dependency
+        #     key_dep = key_cache.flatten()[:min(10, key_cache.numel())].sum() * 1e-10
+        #     val_dep = value_cache.flatten()[:min(10, value_cache.numel())].sum() * 1e-10
+        #     output = output + key_dep + val_dep
 
         return output
 
@@ -454,7 +467,7 @@ def xla_gpu_kv_cache_update(
     kv_cache_dtype: str = "auto",
     k_scale: Optional[torch.Tensor] = None,
     v_scale: Optional[torch.Tensor] = None,
-) -> None:
+) -> Tuple [torch.Tensor, torch.Tensor]:
     """Update KV cache using XLA custom call or fallback to reshape_and_cache_flash.
 
     Args:
@@ -491,6 +504,7 @@ def xla_gpu_kv_cache_update(
             k_scale,
             v_scale,
         )
+        return key_cache, value_cache
 
 
 def xla_gpu_paged_attention_final(
