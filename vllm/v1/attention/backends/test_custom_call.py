@@ -19,68 +19,48 @@ from vllm.logger import init_logger
 logger = init_logger(__name__)
 
 
-def setup_unified_custom_calls():
-    """Register both custom calls from the unified library."""
-    lib_path = "vllm_xla_ops.so"
+def setup_combined_custom_calls():
+    """Register both custom calls from a single library"""
     
-    # Check if library exists
-    if not os.path.exists(lib_path):
-        print(f"✗ Unified library not found: {lib_path}")
-        print("  Please copy vllm_xla_ops.so to the current directory or compile it first")
-        return False
+    if not os.path.exists("vllm_xla_ops.so"):
+        print("Compiling combined library...")
+        if os.system("bash compile_combined_xla.sh") != 0:
+            raise RuntimeError("Compilation failed")
     
-    try:
-        # Load the unified library
-        lib = ctypes.CDLL(lib_path, ctypes.RTLD_LOCAL)
-        
-        # Setup PyCapsule creation
-        PyCapsule_New = ctypes.pythonapi.PyCapsule_New
-        PyCapsule_New.restype = ctypes.py_object
-        PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-        
-        # Register flash_attn_varlen
-        try:
-            flash_func_addr = ctypes.cast(
-                lib.flash_attn_varlen_xla_custom_call, 
-                ctypes.c_void_p
-            ).value
-            flash_capsule = PyCapsule_New(flash_func_addr, None, None)
-            torch_xla._XLAC._xla_register_custom_call_target(
-                "flash_attn_varlen",
-                flash_capsule,
-                "CUDA"
-            )
-            print("✓ Registered: flash_attn_varlen")
-        except AttributeError as e:
-            print(f"⚠ flash_attn_varlen not found: {e}")
-        
-        # Register vllm_reshape_and_cache_flash
-        try:
-            reshape_func_addr = ctypes.cast(
-                lib.reshape_and_cache_flash_xla_custom_call,
-                ctypes.c_void_p
-            ).value
-            reshape_capsule = PyCapsule_New(reshape_func_addr, None, None)
-            torch_xla._XLAC._xla_register_custom_call_target(
-                "vllm_reshape_and_cache_flash",
-                reshape_capsule,
-                "CUDA"
-            )
-            print("✓ Registered: vllm_reshape_and_cache_flash")
-        except AttributeError as e:
-            print(f"⚠ reshape_and_cache not found: {e}")
-        
-        print("✓ Unified XLA ops registration complete")
-        return True
-        
-    except Exception as e:
-        print(f"✗ Failed to register unified XLA ops: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+    # 加载单个库
+    lib = ctypes.CDLL("./vllm_xla_ops.so", ctypes.RTLD_LOCAL)
+    
+    PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+    PyCapsule_New.restype = ctypes.py_object
+    PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    # 注册第二个函数
+    func2_addr = ctypes.cast(lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
+    capsule2 = PyCapsule_New(func2_addr, None, None)
+    torch_xla._XLAC._xla_register_custom_call_target(
+        "vllm_reshape_and_cache_flash_xxx",
+        capsule2,
+        "CUDA"
+    )
+    print("✓ vllm_reshape_and_cache_flash registered")
+    
+    # 注册第一个函数
+    func1_addr = ctypes.cast(lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p).value
+    capsule1 = PyCapsule_New(func1_addr, None, None)
+    torch_xla._XLAC._xla_register_custom_call_target(
+        "flash_attn_varlen_xxx",
+        capsule1,
+        "CUDA"
+    )
+    print("✓ flash_attn_varlen registered")
+    
+    # 保持引用
+    global _combined_lib, _capsules
+    _combined_lib = lib
+    _capsules = [capsule1, capsule2]
 
 # Register both custom calls from unified library
-setup_unified_custom_calls()
+setup_combined_custom_calls()
 
 def reshape_and_cache_flash_impl(
     key: torch.Tensor,
@@ -130,12 +110,12 @@ def reshape_and_cache_flash_impl(
     # Note: The LAST 2 buffers in the list are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
-        "vllm_reshape_and_cache_flash",
+        "vllm_reshape_and_cache_flash_xxx",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
         True,  # has_side_effect - this operation modifies the cache buffers
         descriptor,
-        2,  # api_version
+        1,  # api_version
         {}
     )
     
@@ -260,12 +240,12 @@ def flash_attn_varlen_xla_impl(
     # Call XLA custom op
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
-        "flash_attn_varlen",
+        "flash_attn_varlen_xxx",
         [out_shape, softmax_lse_shape],
         [q.dtype, torch.float32],
         False,  # has_side_effect
         descriptor,
-        2,  # api_version
+        1,  # api_version
         {},
     )
 
@@ -530,7 +510,23 @@ if __name__ == "__main__":
         print("\n" + "-" * 50)
         print("Test 2: xla_gpu_paged_attention_final with torch.compile")
         print("-" * 50)
+            
+        # # 加载单个库
+        # lib = ctypes.CDLL("./vllm_xla_ops.so", ctypes.RTLD_LOCAL)
         
+        # PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+        # PyCapsule_New.restype = ctypes.py_object
+        # PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+        
+        # # 注册第一个函数
+        # func1_addr = ctypes.cast(lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p).value
+        # capsule1 = PyCapsule_New(func1_addr, None, None)
+        # torch_xla._XLAC._xla_register_custom_call_target(
+        #     "flash_attn_varlen_xxx",
+        #     capsule1,
+        #     "CUDA"
+        # )
+        # print("✓ flash_attn_varlen registered")
         try:
             
             # Define the wrapped function for compilation
@@ -826,7 +822,7 @@ if __name__ == "__main__":
     results = []
     
     # Test 1: KV Cache Update
-    # results.append(("KV Cache Update", test_xla_gpu_kv_cache_update()))
+    results.append(("KV Cache Update", test_xla_gpu_kv_cache_update()))
     
     # Test 2: Paged Attention
     results.append(("Paged Attention", test_xla_gpu_paged_attention_final()))

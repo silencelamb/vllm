@@ -22,7 +22,14 @@ Usage:
 import glob
 import os
 
-os.environ["XLA_FLAGS"] = "--xla_dump_to=./xla_dump/"
+import os
+# 在任何 import 之前设置
+os.environ["XLA_FLAGS"] = "--xla_dump_to=/code/github_code/xla_vllm/vllm/tests/xla_gpu/xla_dump --xla_dump_hlo_as_text"
+os.environ["XLA_HLO_DEBUG"] = "1"
+
+# 创建目录
+os.makedirs("/code/github_code/xla_vllm/vllm/tests/xla_gpu/xla_dump", exist_ok=True)
+
 # os.environ["XLA_DYNAMO_DEBUG"]="1"
 import shutil
 import tempfile

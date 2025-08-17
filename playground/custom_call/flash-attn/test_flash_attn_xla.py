@@ -7,7 +7,7 @@ import torch_xla
 import torch_xla.core.xla_model as xm
 import ctypes
 import numpy as np
-from torch.library import Library
+from torch.library import Library, impl
 from torch_xla.experimental.custom_kernel import XLA_LIB
 from torch.library import register_fake
 
@@ -205,6 +205,32 @@ def flash_attn_varlen_op_fake(
     )
     return out, softmax_lse
 
+@impl(XLA_LIB, "flash_attn_varlen_op", "CompositeExplicitAutograd")
+def flash_attn_varlen_op_composite(
+    q,
+    k,
+    v,
+    cu_seqlens_q,
+    cu_seqlens_k,
+    max_seqlen_q,
+    max_seqlen_k,
+    softmax_scale,
+    is_causal,
+    window_left,
+    window_right,
+    softcap,
+    seqused_k,
+    block_table,
+):
+
+    output = torch.empty_like(q)
+    # lse (log sum exp) 的形状
+    total_q = q.shape[0]
+    num_heads = q.shape[1]
+    lse_shape = (num_heads, total_q)
+    lse = q.new_empty(lse_shape)
+
+    return output, lse
 
 def flash_attn_varlen_func_xla(
     q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, softmax_scale, seqused_k, block_table
@@ -318,6 +344,13 @@ def test_torch_compile():
     cu_seqlens_q = torch.tensor([0, seqlen], dtype=torch.int32, device=device)
     cu_seqlens_k = torch.tensor([0, seqlen], dtype=torch.int32, device=device)
     softmax_scale = 1.0 / (q.shape[-1] ** 0.5)
+    
+    torch._dynamo.mark_dynamic(q, 0)
+    torch._dynamo.mark_dynamic(k, 0)
+    torch._dynamo.mark_dynamic(v, 0)
+    torch._dynamo.mark_dynamic(cu_seqlens_q, 1)
+    torch._dynamo.mark_dynamic(cu_seqlens_k, 1)
+    
 
     try:
         compiled_flash_attn = torch.compile(

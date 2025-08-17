@@ -153,6 +153,11 @@ def reshape_and_cache_flash_fake(
     )
     return out_k, out_v
 
+@impl(XLA_LIB, "reshape_and_cache_flash", "CompositeExplicitAutograd")
+def reshape_and_cache_flash_composite(key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale):
+    # 同样的实现
+    return key_cache.clone(), value_cache.clone()
+
 
 def reshape_and_cache_flash(
     key: torch.Tensor,

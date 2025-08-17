@@ -68,10 +68,10 @@ COMMON_CXX_FLAGS="$COMMON_CXX_FLAGS -Wno-deprecated-declarations"
 
 # Architecture flags for common GPUs
 ARCH_FLAGS=""
-ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_70,code=sm_70"  # V100
-ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_75,code=sm_75"  # T4
+# ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_70,code=sm_70"  # V100
+# ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_75,code=sm_75"  # T4
 ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_80,code=sm_80"  # A100
-ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_86,code=sm_86"  # RTX 3090
+# ARCH_FLAGS="$ARCH_FLAGS -gencode arch=compute_86,code=sm_86"  # RTX 3090
 
 # Include directories
 INCLUDE_FLAGS=""
