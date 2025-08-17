@@ -45,6 +45,16 @@ def setup_combined_custom_calls():
     PyCapsule_New.restype = ctypes.py_object
     PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
 
+    # 注册第一个函数
+    func1_addr = ctypes.cast(
+        lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p
+    ).value
+    capsule1 = PyCapsule_New(func1_addr, None, None)
+    torch_xla._XLAC._xla_register_custom_call_target(
+        "flash_attn_varlen_xxx", capsule1, "CUDA"
+    )
+    print("✓ flash_attn_varlen registered")
+    
     # 注册第二个函数
     func2_addr = ctypes.cast(
         lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p
@@ -55,15 +65,7 @@ def setup_combined_custom_calls():
     )
     print("✓ vllm_reshape_and_cache_flash registered")
 
-    # 注册第一个函数
-    func1_addr = ctypes.cast(
-        lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p
-    ).value
-    capsule1 = PyCapsule_New(func1_addr, None, None)
-    torch_xla._XLAC._xla_register_custom_call_target(
-        "flash_attn_varlen_xxx", capsule1, "CUDA"
-    )
-    print("✓ flash_attn_varlen registered")
+
 
     # 保持引用
     global _combined_lib, _capsules
@@ -148,25 +150,12 @@ XLA_LIB.define(
 XLA_LIB.impl("reshape_and_cache_flash", reshape_and_cache_flash_impl, "XLA")
 
 
-# Fake implementation for meta tensors
-@register_fake("xla::reshape_and_cache_flash")
-def reshape_and_cache_flash_fake(
-    key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
-):
-    out_k = torch.empty_strided(
-        key_cache.shape, key_cache.stride(), dtype=key_cache.dtype, device="meta"
-    )
-    out_v = torch.empty_strided(
-        value_cache.shape, value_cache.stride(), dtype=value_cache.dtype, device="meta"
-    )
-    return out_k, out_v
-
 
 @impl(XLA_LIB, "reshape_and_cache_flash", "CompositeExplicitAutograd")
 def reshape_and_cache_flash_composite(
     key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
-    # 同样的实现
+    # 为了形状推导
     return key_cache.clone(), value_cache.clone()
 
 
@@ -277,34 +266,7 @@ XLA_LIB.define(
     "Tensor? seqused_k, Tensor? block_table) -> (Tensor, Tensor)"
 )
 
-
 XLA_LIB.impl("flash_attn_varlen_op", flash_attn_varlen_xla_impl, "XLA")
-
-
-# Fake implementation for meta tensors
-@register_fake("xla::flash_attn_varlen_op")
-def flash_attn_varlen_op_fake(
-    q,
-    k,
-    v,
-    cu_seqlens_q,
-    cu_seqlens_k,
-    max_seqlen_q,
-    max_seqlen_k,
-    softmax_scale,
-    is_causal,
-    window_left,
-    window_right,
-    softcap,
-    seqused_k,
-    block_table,
-):
-    out = torch.empty_strided(q.shape, q.stride(), dtype=q.dtype, device=q.device)
-    softmax_lse = torch.empty_strided(
-        [q.shape[1], q.shape[0]], [1, q.shape[1]], dtype=torch.float32, device=q.device
-    )
-    return out, softmax_lse
-
 
 @impl(XLA_LIB, "flash_attn_varlen_op", "CompositeExplicitAutograd")
 def flash_attn_varlen_op_composite(

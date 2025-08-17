@@ -24,7 +24,7 @@ def setup_combined_custom_calls():
     
     if not os.path.exists("vllm_xla_ops.so"):
         print("Compiling combined library...")
-        if os.system("bash compile_combined_xla.sh") != 0:
+        if os.system("bash compile_xla_ops.sh") != 0:
             raise RuntimeError("Compilation failed")
     
     # 加载单个库
@@ -38,7 +38,7 @@ def setup_combined_custom_calls():
     func2_addr = ctypes.cast(lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
     capsule2 = PyCapsule_New(func2_addr, None, None)
     torch_xla._XLAC._xla_register_custom_call_target(
-        "vllm_reshape_and_cache_flash_xxx",
+        "torch_xla_daixu_project::vllm_reshape_and_cache_flash_xxx",
         capsule2,
         "CUDA"
     )
@@ -48,7 +48,7 @@ def setup_combined_custom_calls():
     func1_addr = ctypes.cast(lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p).value
     capsule1 = PyCapsule_New(func1_addr, None, None)
     torch_xla._XLAC._xla_register_custom_call_target(
-        "flash_attn_varlen_xxx",
+        "torch_xla_daixu_project::flash_attn_varlen_xxx",
         capsule1,
         "CUDA"
     )
@@ -110,7 +110,7 @@ def reshape_and_cache_flash_impl(
     # Note: The LAST 2 buffers in the list are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
-        "vllm_reshape_and_cache_flash_xxx",
+        "torch_xla_daixu_project::vllm_reshape_and_cache_flash_xxx",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
         True,  # has_side_effect - this operation modifies the cache buffers
@@ -240,7 +240,7 @@ def flash_attn_varlen_xla_impl(
     # Call XLA custom op
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
-        "flash_attn_varlen_xxx",
+        "torch_xla_daixu_project::flash_attn_varlen_xxx",
         [out_shape, softmax_lse_shape],
         [q.dtype, torch.float32],
         False,  # has_side_effect
@@ -522,7 +522,7 @@ if __name__ == "__main__":
         # func1_addr = ctypes.cast(lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p).value
         # capsule1 = PyCapsule_New(func1_addr, None, None)
         # torch_xla._XLAC._xla_register_custom_call_target(
-        #     "flash_attn_varlen_xxx",
+        #     "torch_xla_daixu_project::flash_attn_varlen_xxx",
         #     capsule1,
         #     "CUDA"
         # )

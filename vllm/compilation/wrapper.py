@@ -51,8 +51,7 @@ class TorchCompileWrapperWithCustomDispatcher:
                 self.forward,
                 fullgraph=envs.VLLM_TEST_DYNAMO_FULLGRAPH_CAPTURE,
                 backend=backend,
-                dynamic=False,
-                options=options,
+                options=options
             )
             logger.info(
                 f"====== backend: {backend}, options: {options}, fullgraph: {envs.VLLM_TEST_DYNAMO_FULLGRAPH_CAPTURE}"
