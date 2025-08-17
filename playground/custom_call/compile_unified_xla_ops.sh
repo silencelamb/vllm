@@ -4,14 +4,24 @@
 # - flash_attn_varlen
 # - vllm_reshape_and_cache_flash
 # This creates a single shared library with both custom calls
+#
+# Usage:
+#   bash compile_unified_xla_ops.sh          # Normal build (suppress warnings)
+#   SHOW_WARNINGS=1 bash compile_unified_xla_ops.sh  # Show all warnings
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 VLLM_ROOT="$SCRIPT_DIR/../.."
 
+# Check if we should show warnings
+SHOW_WARNINGS=${SHOW_WARNINGS:-0}
+
 echo "============================================================"
 echo "Building Unified XLA Custom Calls Library"
+if [ "$SHOW_WARNINGS" -eq 0 ]; then
+    echo "(Warnings suppressed. Use SHOW_WARNINGS=1 to see all warnings)"
+fi
 echo "============================================================"
 
 # Get CUDA and PyTorch paths
@@ -48,8 +58,13 @@ COMMON_NVCC_FLAGS="-O3 -std=c++17 --use_fast_math"
 COMMON_NVCC_FLAGS="$COMMON_NVCC_FLAGS -D_GLIBCXX_USE_CXX11_ABI=$TORCH_ABI"
 COMMON_NVCC_FLAGS="$COMMON_NVCC_FLAGS -DNDEBUG"
 COMMON_NVCC_FLAGS="$COMMON_NVCC_FLAGS -Xcompiler -fPIC"
+# Suppress deprecated warnings from CUDA headers
+COMMON_NVCC_FLAGS="$COMMON_NVCC_FLAGS -Xcudafe --diag_suppress=20012"
+COMMON_NVCC_FLAGS="$COMMON_NVCC_FLAGS -Xcompiler -Wno-deprecated-declarations"
 
 COMMON_CXX_FLAGS="-O3 -std=c++17 -fPIC -D_GLIBCXX_USE_CXX11_ABI=$TORCH_ABI"
+# Suppress deprecated warnings for C++ compilation
+COMMON_CXX_FLAGS="$COMMON_CXX_FLAGS -Wno-deprecated-declarations"
 
 # Architecture flags for common GPUs
 ARCH_FLAGS=""
@@ -72,10 +87,18 @@ INCLUDE_FLAGS="$INCLUDE_FLAGS -I$VLLM_ROOT"
 # Step 1: Compile vLLM cache kernels (CUDA)
 echo ""
 echo "[1/4] Compiling vLLM cache_kernels.cu..."
-nvcc $COMMON_NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
-    -DTORCH_EXTENSION_NAME=unified_xla_ops \
-    -c "$VLLM_ROOT/csrc/cache_kernels.cu" \
-    -o cache_kernels.o
+if [ "$SHOW_WARNINGS" -eq 1 ]; then
+    nvcc $COMMON_NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
+        -DTORCH_EXTENSION_NAME=unified_xla_ops \
+        -c "$VLLM_ROOT/csrc/cache_kernels.cu" \
+        -o cache_kernels.o
+else
+    # Suppress warnings for cleaner output
+    nvcc $COMMON_NVCC_FLAGS $ARCH_FLAGS $INCLUDE_FLAGS \
+        -DTORCH_EXTENSION_NAME=unified_xla_ops \
+        -c "$VLLM_ROOT/csrc/cache_kernels.cu" \
+        -o cache_kernels.o 2>&1 | grep -v "warning:" | grep -v "note:" || true
+fi
 
 # Step 2: Compile reshape_and_cache XLA wrapper (C++)
 echo "[2/4] Compiling reshape_and_cache XLA wrapper..."
@@ -84,9 +107,15 @@ if [ ! -f "$RESHAPE_SRC" ]; then
     echo "✗ Source file not found: $RESHAPE_SRC"
     exit 1
 fi
-g++ $COMMON_CXX_FLAGS $INCLUDE_FLAGS \
-    -c "$RESHAPE_SRC" \
-    -o reshape_and_cache_xla.o
+if [ "$SHOW_WARNINGS" -eq 1 ]; then
+    g++ $COMMON_CXX_FLAGS $INCLUDE_FLAGS \
+        -c "$RESHAPE_SRC" \
+        -o reshape_and_cache_xla.o
+else
+    g++ $COMMON_CXX_FLAGS $INCLUDE_FLAGS \
+        -c "$RESHAPE_SRC" \
+        -o reshape_and_cache_xla.o 2>&1 | grep -v "warning:" | grep -v "note:" || true
+fi
 
 # Step 3: Compile flash_attn_varlen XLA wrapper (C++)
 echo "[3/4] Compiling flash_attn_varlen XLA wrapper..."
@@ -95,9 +124,15 @@ if [ ! -f "$FLASH_SRC" ]; then
     echo "✗ Source file not found: $FLASH_SRC"
     exit 1
 fi
-g++ $COMMON_CXX_FLAGS $INCLUDE_FLAGS \
-    -c "$FLASH_SRC" \
-    -o flash_attn_varlen_xla.o
+if [ "$SHOW_WARNINGS" -eq 1 ]; then
+    g++ $COMMON_CXX_FLAGS $INCLUDE_FLAGS \
+        -c "$FLASH_SRC" \
+        -o flash_attn_varlen_xla.o
+else
+    g++ $COMMON_CXX_FLAGS $INCLUDE_FLAGS \
+        -c "$FLASH_SRC" \
+        -o flash_attn_varlen_xla.o 2>&1 | grep -v "warning:" | grep -v "note:" || true
+fi
 
 # Step 4: Link everything into a single shared library
 echo "[4/4] Linking unified XLA shared library..."
