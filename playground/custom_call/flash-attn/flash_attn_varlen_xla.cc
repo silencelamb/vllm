@@ -45,7 +45,7 @@ std::vector<at::Tensor> mha_varlen_fwd(
 } // namespace flash
 
 // Utility function to convert shape to string
-std::string shape_to_string(const std::vector<long int>& shape) {
+static std::string shape_to_string(const std::vector<long int>& shape) {
     std::ostringstream oss;
     oss << "[";
     for (size_t i = 0; i < shape.size(); ++i) {

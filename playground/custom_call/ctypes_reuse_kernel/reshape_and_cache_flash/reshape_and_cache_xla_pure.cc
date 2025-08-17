@@ -12,7 +12,7 @@
 #include <vector>
 
 // 工具函数，将 vector 转为字符串
-std::string shape_to_string(const std::vector<long int>& shape) {
+static std::string shape_to_string(const std::vector<long int>& shape) {
     std::ostringstream oss;
     oss << "[";
     for (size_t i = 0; i < shape.size(); ++i) {
