@@ -25,48 +25,55 @@ from vllm.logger import init_logger
 
 logger = init_logger(__name__)
 
+
 def setup_combined_custom_calls():
     """Register both custom calls from a single library"""
-    
-    if not os.path.exists("vllm_xla_ops.so"):
-        print("Compiling combined library...")
-        if os.system("bash compile_combined_xla.sh") != 0:
+
+    # 获取当前文件所在目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    so_path = os.path.join(current_dir, "vllm_xla_ops.so")
+    compile_script = os.path.join(current_dir, "compile_xla_ops.sh")
+
+    if not os.path.exists(so_path):
+        print(f"Compiling combined library at {current_dir}...")
+        if os.system(f"bash {compile_script}") != 0:
             raise RuntimeError("Compilation failed")
-    
+
     # 加载单个库
-    lib = ctypes.CDLL("./vllm_xla_ops.so", ctypes.RTLD_LOCAL)
-    
+    lib = ctypes.CDLL(so_path, ctypes.RTLD_LOCAL)
     PyCapsule_New = ctypes.pythonapi.PyCapsule_New
     PyCapsule_New.restype = ctypes.py_object
     PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
 
     # 注册第二个函数
-    func2_addr = ctypes.cast(lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
+    func2_addr = ctypes.cast(
+        lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p
+    ).value
     capsule2 = PyCapsule_New(func2_addr, None, None)
     torch_xla._XLAC._xla_register_custom_call_target(
-        "vllm_reshape_and_cache_flash_xxx",
-        capsule2,
-        "CUDA"
+        "vllm_reshape_and_cache_flash_xxx", capsule2, "CUDA"
     )
     print("✓ vllm_reshape_and_cache_flash registered")
-    
+
     # 注册第一个函数
-    func1_addr = ctypes.cast(lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p).value
+    func1_addr = ctypes.cast(
+        lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p
+    ).value
     capsule1 = PyCapsule_New(func1_addr, None, None)
     torch_xla._XLAC._xla_register_custom_call_target(
-        "flash_attn_varlen_xxx",
-        capsule1,
-        "CUDA"
+        "flash_attn_varlen_xxx", capsule1, "CUDA"
     )
     print("✓ flash_attn_varlen registered")
-    
+
     # 保持引用
     global _combined_lib, _capsules
     _combined_lib = lib
     _capsules = [capsule1, capsule2]
 
+
 # Register both custom calls from unified library
 USE_CUSTOM_OP = setup_combined_custom_calls()
+
 
 def reshape_and_cache_flash_impl(
     key: torch.Tensor,
@@ -85,24 +92,23 @@ def reshape_and_cache_flash_impl(
     head_size = key.shape[2]
     num_blocks = key_cache.shape[0]
     block_size = key_cache.shape[1]
-    
+
     # Map dtype
     dtype_map = {"auto": 0, "float32": 0, "float16": 1, "bfloat16": 2}
     kv_cache_dtype_int = dtype_map.get(kv_cache_dtype, 0)
-    
+
     # Check scales
     has_k_scale = k_scale is not None
     has_v_scale = v_scale is not None
-    
 
     # Format: "dtype_str|num_tokens|num_heads|head_size|num_blocks|block_size|has_k_scale|has_v_scale"
     descriptor_str = f"{kv_cache_dtype}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
-    descriptor = descriptor_str.encode('utf-8')
-    
+    descriptor = descriptor_str.encode("utf-8")
+
     # XLA custom call buffer ordering for GPU:
     # IMPORTANT: On GPU, the LAST num_outputs buffers are outputs!
     # For in-place operations, we pass the cache buffers as both input and output
-    
+
     # Order: inputs first, then outputs at the end
     buffers = [key, value, key_cache, value_cache, slot_mapping]  # inputs
     if has_k_scale:
@@ -111,7 +117,7 @@ def reshape_and_cache_flash_impl(
         buffers.append(v_scale)
     # Add outputs at the end (same tensors as input caches for in-place)
     buffers.extend([key_cache, value_cache])  # outputs (last 2)
-    
+
     # Call XLA custom op
     # Note: The LAST 2 buffers in the list are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
@@ -122,9 +128,9 @@ def reshape_and_cache_flash_impl(
         True,  # has_side_effect - this operation modifies the cache buffers
         descriptor,
         1,  # api_version
-        {}
+        {},
     )
-    
+
     # This is important: XLA custom call returns the outputs in the same order as inputs
     # So we need to extract the last 2 tensors as outputs
     # return key_cache, value_cache
@@ -145,8 +151,7 @@ XLA_LIB.impl("reshape_and_cache_flash", reshape_and_cache_flash_impl, "XLA")
 # Fake implementation for meta tensors
 @register_fake("xla::reshape_and_cache_flash")
 def reshape_and_cache_flash_fake(
-    key, value, key_cache, value_cache, slot_mapping,
-    kv_cache_dtype, k_scale, v_scale
+    key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
     out_k = torch.empty_strided(
         key_cache.shape, key_cache.stride(), dtype=key_cache.dtype, device="meta"
@@ -156,11 +161,13 @@ def reshape_and_cache_flash_fake(
     )
     return out_k, out_v
 
+
 @impl(XLA_LIB, "reshape_and_cache_flash", "CompositeExplicitAutograd")
-def reshape_and_cache_flash_composite(key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale):
+def reshape_and_cache_flash_composite(
+    key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
+):
     # 同样的实现
     return key_cache.clone(), value_cache.clone()
-
 
 
 def flash_attn_varlen_xla_impl(
@@ -223,8 +230,10 @@ def flash_attn_varlen_xla_impl(
     if cu_seqlens_k is None:
         # For paged attention, create a dummy cu_seqlens_k
         # It's not used but must be a valid tensor
-        cu_seqlens_k = torch.tensor([0, max_seqlen_k * batch_size], dtype=torch.int32, device=q.device)
-    
+        cu_seqlens_k = torch.tensor(
+            [0, max_seqlen_k * batch_size], dtype=torch.int32, device=q.device
+        )
+
     # Prepare buffers
     buffers = [q, k, v, cu_seqlens_q, cu_seqlens_k]
 
@@ -295,6 +304,7 @@ def flash_attn_varlen_op_fake(
     )
     return out, softmax_lse
 
+
 @impl(XLA_LIB, "flash_attn_varlen_op", "CompositeExplicitAutograd")
 def flash_attn_varlen_op_composite(
     q,
@@ -322,13 +332,23 @@ def flash_attn_varlen_op_composite(
 
     return output, lse
 
+
 def flash_attn_varlen_func_xla(
-    q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, softmax_scale, seqused_k, block_table
+    q,
+    k,
+    v,
+    cu_seqlens_q,
+    cu_seqlens_k,
+    max_seqlen_q,
+    max_seqlen_k,
+    softmax_scale,
+    seqused_k,
+    block_table,
 ):
     return torch.ops.xla.flash_attn_varlen_op(
         q,
-        k,    # key_cache
-        v,    # value_cache
+        k,  # key_cache
+        v,  # value_cache
         cu_seqlens_q,
         cu_seqlens_k,  # only used for non-paged prefill, else None
         max_seqlen_q,
@@ -563,13 +583,17 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         # For paged attention, cu_seqlens_k is not used but still needs to be provided
         # Create a dummy cu_seqlens_k tensor if None
         if attn_metadata.query_start_loc is not None:
-            cu_seqlens_k = attn_metadata.query_start_loc.to(dtype=torch.int32)  # Convert to int32
+            cu_seqlens_k = attn_metadata.query_start_loc.to(
+                dtype=torch.int32
+            )  # Convert to int32
         else:
-            cu_seqlens_k = torch.tensor([0, attn_metadata.max_seq_len], dtype=torch.int32, device=query.device)
-        
+            cu_seqlens_k = torch.tensor(
+                [0, attn_metadata.max_seq_len], dtype=torch.int32, device=query.device
+            )
+
         output, lse = torch.ops.xla.flash_attn_varlen_op(
             query,  # q
-            key_cache,  # k  
+            key_cache,  # k
             value_cache,  # v
             attn_metadata.query_start_loc,  # cu_seqlens_q
             cu_seqlens_k,  # cu_seqlens_k (required even if not used)
