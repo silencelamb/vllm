@@ -19,57 +19,68 @@ from vllm.logger import init_logger
 logger = init_logger(__name__)
 
 
-def setup_custom_call_flash_attn():
-    """Compile and register the custom call."""
-    if not os.path.exists("flash_attn_varlen_xla.so"):
-        print("Compiling library...")
-        if os.system("bash compile_flash_attn_xla.sh") != 0:
-            raise RuntimeError("Compilation failed")
-
-    # Use RTLD_LOCAL instead of RTLD_GLOBAL to avoid symbol conflicts
-    lib_flash = ctypes.CDLL("./flash_attn_varlen_xla.so", ctypes.RTLD_LOCAL)
-    func_addr_flash = ctypes.cast(
-        lib_flash.flash_attn_varlen_xla_custom_call, ctypes.c_void_p
-    ).value
-
-    PyCapsule_New_flash = ctypes.pythonapi.PyCapsule_New
-    PyCapsule_New_flash.restype = ctypes.py_object
-    PyCapsule_New_flash.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-    capsule_flash = PyCapsule_New_flash(func_addr_flash, None, None)
-
-    torch_xla._XLAC._xla_register_custom_call_target(
-        "flash_attn_varlen", 
-        capsule_flash,
-        "CUDA"
-    )
-    print("✓ Custom call flash_attn_varlen_xla registered")
-
-def setup_custom_call_reshape_and_cache():
-    """Compile and register the custom call."""
-    if not os.path.exists("reshape_and_cache_xla.so"):
-        print("Compiling library...")
-        if os.system("bash compile_reshape_and_cache.sh") != 0:
-            raise RuntimeError("Compilation failed")
+def setup_unified_custom_calls():
+    """Register both custom calls from the unified library."""
+    lib_path = "vllm_xla_ops.so"
     
-    # Use RTLD_LOCAL instead of RTLD_GLOBAL to avoid symbol conflicts
-    lib_reshape = ctypes.CDLL("./reshape_and_cache_xla.so", ctypes.RTLD_LOCAL)
-    func_addr_reshape = ctypes.cast(lib_reshape.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
+    # Check if library exists
+    if not os.path.exists(lib_path):
+        print(f"✗ Unified library not found: {lib_path}")
+        print("  Please copy vllm_xla_ops.so to the current directory or compile it first")
+        return False
     
-    PyCapsule_New_reshape = ctypes.pythonapi.PyCapsule_New
-    PyCapsule_New_reshape.restype = ctypes.py_object
-    PyCapsule_New_reshape.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-    capsule_reshape = PyCapsule_New_reshape(func_addr_reshape, None, None)
-    
-    torch_xla._XLAC._xla_register_custom_call_target(
-        "vllm_reshape_and_cache_flash",
-        capsule_reshape,
-        "CUDA"
-    )
-    print("✓ Custom call reshape_and_cache_flash registered")
-    
+    try:
+        # Load the unified library
+        lib = ctypes.CDLL(lib_path, ctypes.RTLD_LOCAL)
+        
+        # Setup PyCapsule creation
+        PyCapsule_New = ctypes.pythonapi.PyCapsule_New
+        PyCapsule_New.restype = ctypes.py_object
+        PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+        
+        # Register flash_attn_varlen
+        try:
+            flash_func_addr = ctypes.cast(
+                lib.flash_attn_varlen_xla_custom_call, 
+                ctypes.c_void_p
+            ).value
+            flash_capsule = PyCapsule_New(flash_func_addr, None, None)
+            torch_xla._XLAC._xla_register_custom_call_target(
+                "flash_attn_varlen",
+                flash_capsule,
+                "CUDA"
+            )
+            print("✓ Registered: flash_attn_varlen")
+        except AttributeError as e:
+            print(f"⚠ flash_attn_varlen not found: {e}")
+        
+        # Register vllm_reshape_and_cache_flash
+        try:
+            reshape_func_addr = ctypes.cast(
+                lib.reshape_and_cache_flash_xla_custom_call,
+                ctypes.c_void_p
+            ).value
+            reshape_capsule = PyCapsule_New(reshape_func_addr, None, None)
+            torch_xla._XLAC._xla_register_custom_call_target(
+                "vllm_reshape_and_cache_flash",
+                reshape_capsule,
+                "CUDA"
+            )
+            print("✓ Registered: vllm_reshape_and_cache_flash")
+        except AttributeError as e:
+            print(f"⚠ reshape_and_cache not found: {e}")
+        
+        print("✓ Unified XLA ops registration complete")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Failed to register unified XLA ops: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
-setup_custom_call_reshape_and_cache()
-setup_custom_call_flash_attn()
+# Register both custom calls from unified library
+setup_unified_custom_calls()
 
 def reshape_and_cache_flash_impl(
     key: torch.Tensor,
