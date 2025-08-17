@@ -37,7 +37,9 @@ def setup_custom_call_flash_attn():
     capsule = PyCapsule_New(func_addr, None, None)
 
     torch_xla._XLAC._xla_register_custom_call_target(
-        "flash_attn_varlen", capsule, "CUDA"
+        "flash_attn_varlen", 
+        capsule,
+        "CUDA"
     )
     print("✓ Custom call flash_attn_varlen_xla registered")
 
@@ -64,7 +66,7 @@ def setup_custom_call_reshape_and_cache():
     print("✓ Custom call reshape_and_cache_flash registered")
     
 
-setup_custom_call_reshape_and_cache()
+# setup_custom_call_reshape_and_cache()
 setup_custom_call_flash_attn()
 
 def reshape_and_cache_flash_impl(
@@ -162,7 +164,7 @@ def reshape_and_cache_flash_composite(key, value, key_cache, value_cache, slot_m
 
 
 
-def flash_attn_varlen_impl(
+def flash_attn_varlen_xla_impl(
     q: torch.Tensor,  # (total_q, num_heads, head_size)
     k: torch.Tensor,  # (total_k, num_heads_k, head_size)
     v: torch.Tensor,  # (total_k, num_heads_k, head_size)
@@ -172,7 +174,8 @@ def flash_attn_varlen_impl(
     max_seqlen_k: int,
     softmax_scale: float,
     is_causal: bool = False,
-    window_size: tuple[int, int] = (-1, -1),
+    window_left: int = -1,
+    window_right: int = -1,
     softcap: float = 0.0,
     seqused_k: torch.Tensor = None,
     block_table: torch.Tensor = None,
@@ -214,7 +217,7 @@ def flash_attn_varlen_impl(
             max_blocks_per_seq = (max_seqlen_k + block_size - 1) // block_size
 
     # Create descriptor with all parameters
-    descriptor_str = f"{batch_size}|{max_seqlen_q}|{max_seqlen_k}|{num_heads}|{num_heads_k}|{head_size}|{total_q}|{total_k}|{softmax_scale}|{int(is_causal)}|{window_size[0]}|{window_size[1]}|{softcap}|{int(has_block_table)}|{int(has_seqused_k)}|{block_size}|{max_blocks_per_seq}"
+    descriptor_str = f"{batch_size}|{max_seqlen_q}|{max_seqlen_k}|{num_heads}|{num_heads_k}|{head_size}|{total_q}|{total_k}|{softmax_scale}|{int(is_causal)}|{window_left}|{window_right}|{softcap}|{int(has_block_table)}|{int(has_seqused_k)}|{block_size}|{max_blocks_per_seq}"
     descriptor = descriptor_str.encode("utf-8")
 
     # Ensure cu_seqlens_k is not None (required for XLA custom call)
@@ -264,40 +267,6 @@ XLA_LIB.define(
     "bool is_causal, int window_left, int window_right, float softcap, "
     "Tensor? seqused_k, Tensor? block_table) -> (Tensor, Tensor)"
 )
-
-
-# Implementation for XLA
-def flash_attn_varlen_xla_impl(
-    q,
-    k,
-    v,
-    cu_seqlens_q,
-    cu_seqlens_k,
-    max_seqlen_q,
-    max_seqlen_k,
-    softmax_scale,
-    is_causal,
-    window_left,
-    window_right,
-    softcap,
-    seqused_k,
-    block_table,
-):
-    return flash_attn_varlen_impl(
-        q,
-        k,
-        v,
-        cu_seqlens_q,
-        cu_seqlens_k,
-        max_seqlen_q,
-        max_seqlen_k,
-        softmax_scale,
-        is_causal,
-        (window_left, window_right),
-        softcap,
-        seqused_k,
-        block_table,
-    )
 
 
 XLA_LIB.impl("flash_attn_varlen_op", flash_attn_varlen_xla_impl, "XLA")
