@@ -26,19 +26,20 @@ def setup_custom_call_flash_attn():
         if os.system("bash compile_flash_attn_xla.sh") != 0:
             raise RuntimeError("Compilation failed")
 
-    lib = ctypes.CDLL("./flash_attn_varlen_xla.so", ctypes.RTLD_GLOBAL)
-    func_addr = ctypes.cast(
-        lib.flash_attn_varlen_xla_custom_call, ctypes.c_void_p
+    # Use RTLD_LOCAL instead of RTLD_GLOBAL to avoid symbol conflicts
+    lib_flash = ctypes.CDLL("./flash_attn_varlen_xla.so", ctypes.RTLD_LOCAL)
+    func_addr_flash = ctypes.cast(
+        lib_flash.flash_attn_varlen_xla_custom_call, ctypes.c_void_p
     ).value
 
-    PyCapsule_New = ctypes.pythonapi.PyCapsule_New
-    PyCapsule_New.restype = ctypes.py_object
-    PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-    capsule = PyCapsule_New(func_addr, None, None)
+    PyCapsule_New_flash = ctypes.pythonapi.PyCapsule_New
+    PyCapsule_New_flash.restype = ctypes.py_object
+    PyCapsule_New_flash.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+    capsule_flash = PyCapsule_New_flash(func_addr_flash, None, None)
 
     torch_xla._XLAC._xla_register_custom_call_target(
         "flash_attn_varlen", 
-        capsule,
+        capsule_flash,
         "CUDA"
     )
     print("✓ Custom call flash_attn_varlen_xla registered")
@@ -50,23 +51,24 @@ def setup_custom_call_reshape_and_cache():
         if os.system("bash compile_reshape_and_cache.sh") != 0:
             raise RuntimeError("Compilation failed")
     
-    lib = ctypes.CDLL("./reshape_and_cache_xla.so", ctypes.RTLD_GLOBAL)
-    func_addr = ctypes.cast(lib.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
+    # Use RTLD_LOCAL instead of RTLD_GLOBAL to avoid symbol conflicts
+    lib_reshape = ctypes.CDLL("./reshape_and_cache_xla.so", ctypes.RTLD_LOCAL)
+    func_addr_reshape = ctypes.cast(lib_reshape.reshape_and_cache_flash_xla_custom_call, ctypes.c_void_p).value
     
-    PyCapsule_New = ctypes.pythonapi.PyCapsule_New
-    PyCapsule_New.restype = ctypes.py_object
-    PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-    capsule = PyCapsule_New(func_addr, None, None)
+    PyCapsule_New_reshape = ctypes.pythonapi.PyCapsule_New
+    PyCapsule_New_reshape.restype = ctypes.py_object
+    PyCapsule_New_reshape.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+    capsule_reshape = PyCapsule_New_reshape(func_addr_reshape, None, None)
     
     torch_xla._XLAC._xla_register_custom_call_target(
         "vllm_reshape_and_cache_flash",
-        capsule,
+        capsule_reshape,
         "CUDA"
     )
     print("✓ Custom call reshape_and_cache_flash registered")
     
 
-# setup_custom_call_reshape_and_cache()
+setup_custom_call_reshape_and_cache()
 setup_custom_call_flash_attn()
 
 def reshape_and_cache_flash_impl(
