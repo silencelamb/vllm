@@ -318,7 +318,6 @@ def test_xla_gpu_compilation_simple():
     # 确保XLA编译是同步的, xla_gpu_force_compilation_parallelism
 
     # 添加XLA调试信息
-    os.environ["XLA_FLAGS"] = "--xla_dump_to=./xla_dump/"
     # os.environ["XLA_HLO_DEBUG"] = "1"
     # os.environ["XLA_IR_DEBUG"] = "1"
     # os.environ["XLA_SAVE_TENSORS_FILE"] = "/tmp/xla_tensors.txt"

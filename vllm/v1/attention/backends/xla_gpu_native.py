@@ -467,6 +467,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         self.num_kv_heads = num_kv_heads
         self.logits_soft_cap = logits_soft_cap
         self.kv_sharing_target_layer_name = kv_sharing_target_layer_name
+        logger.info(f"====self.kv_sharing_target_layer_name: {self.kv_sharing_target_layer_name}")
 
         self.num_queries_per_kv = self.num_heads // self.num_kv_heads
         assert (
@@ -518,12 +519,15 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             key_cache = kv_cache
             value_cache = kv_cache
 
+        key = key.view(-1, self.num_kv_heads, self.head_size)
+        value = value.view(-1, self.num_kv_heads, self.head_size)
+
         # Update KV cache with new keys and values
         # This is similar to FlashAttentionImpl
         if self.kv_sharing_target_layer_name is None:
             # Only update cache if not sharing with another layer
             num_actual_tokens = attn_metadata.num_actual_tokens
-            _, _ = torch.ops.xla.reshape_and_cache_flash(
+            new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_flash(
                 key[:num_actual_tokens],
                 value[:num_actual_tokens],
                 key_cache,
@@ -533,6 +537,8 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 k_scale=getattr(layer, "_k_scale", None),
                 v_scale=getattr(layer, "_v_scale", None),
             )
+            # key_cache.copy_(new_key_cache)
+            # value_cache.copy_(new_value_cache)
         seq_lens_to_use = (
             attn_metadata.seq_lens_tensor
             if attn_metadata.seq_lens_tensor is not None
