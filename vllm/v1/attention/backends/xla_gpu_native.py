@@ -592,8 +592,13 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 [0, attn_metadata.max_seq_len], dtype=torch.int32, device=query.device
             )
 
+        # Reshape query to 3D for flash attention
+        # query is [num_tokens, num_heads * head_size], need [num_tokens, num_heads, head_size]
+        num_tokens = query.shape[0]
+        query_3d = query.view(num_tokens, self.num_heads, self.head_size)
+
         output, lse = torch.ops.xla.flash_attn_varlen_op(
-            query,  # q
+            query_3d,  # q - now in correct 3D shape
             key_cache,  # k
             value_cache,  # v
             attn_metadata.query_start_loc,  # cu_seqlens_q
@@ -608,12 +613,9 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
             seq_lens_to_use,  # seqused_k
             block_table_to_use,  # block_table
         )
-        # output = torch.ones_like(query)
-        # # Add small dependency on both key_cache and value_cache
-        # if key_cache.numel() > 0:
-        #     # Use first few elements to create dependency
-        #     key_dep = key_cache.flatten()[:min(10, key_cache.numel())].sum() * 1e-10
-        #     val_dep = value_cache.flatten()[:min(10, value_cache.numel())].sum() * 1e-10
-        #     output = output + key_dep + val_dep
 
-        return output
+        # Reshape output back to 2D
+        # output is [num_tokens, num_heads, head_size], need [num_tokens, num_heads * head_size]
+        output_2d = output.view(num_tokens, self.num_heads * self.head_size)
+
+        return output_2d
