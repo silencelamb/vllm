@@ -188,6 +188,7 @@ def flash_attn_varlen_xla_impl(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Implementation that calls XLA custom op."""
 
+    logger.info(f"======== q shape: {q.shape}")
     # Extract dimensions
     total_q = q.shape[0]
     num_heads = q.shape[1]
