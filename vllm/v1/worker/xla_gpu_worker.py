@@ -53,10 +53,11 @@ class XlaGpuWorker:
         self.use_spmd = envs.VLLM_XLA_USE_SPMD
         self.original_parallel_config = None
         
+        import copy
         if self.use_spmd:
             # Under SPMD mode, distributed env is initialized as if there is
             # only one worker/device.
-            self.original_parallel_config = self.parallel_config
+            self.original_parallel_config = copy.deepcopy(self.parallel_config)
             self.parallel_config.tensor_parallel_size = 1
             self.parallel_config.pipeline_parallel_size = 1
             self.parallel_config.world_size = 1

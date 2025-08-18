@@ -1,0 +1,1 @@
+TENSOR_PARALLEL_SIZE=2 VLLM_XLA_USE_SPMD=1 CUDA_VISIBLE_DEVICES=1,2 PJRT_DEVICE=CUDA GPU_NUM_DEVICES=2  XLA_DYNAMO_DEBUG=1 XLA_FLAGS=--xla_dump_to=./xla_dump/  python test_compilation.py 2>&1 | tee xla_debug.log

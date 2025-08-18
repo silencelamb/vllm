@@ -52,8 +52,8 @@ def test_xla_gpu_compilation():
     os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
     # Set XLA GPU environment variables
 
-    os.environ["GPU_NUM_DEVICES"] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # Use GPU 3
+    # os.environ["GPU_NUM_DEVICES"] = "1"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # Use GPU 3
     os.environ["PJRT_DEVICE"] = "CUDA"
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
     os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
@@ -305,8 +305,8 @@ def test_xla_gpu_compilation_simple():
     # os.environ["CUDA_DEVICE_MAX_CONNECTIONS"] = "1"  # 限制设备连接数
 
     # Set XLA GPU environment variables
-    os.environ["GPU_NUM_DEVICES"] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # Use GPU 3
+    # os.environ["GPU_NUM_DEVICES"] = "1"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # Use GPU 3
     os.environ["PJRT_DEVICE"] = "CUDA"
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
     os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"

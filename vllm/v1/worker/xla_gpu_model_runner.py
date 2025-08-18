@@ -126,14 +126,14 @@ class XlaGpuModelRunner(LoRAModelRunnerMixin):
         self.device = device
         self.check_recompilation = envs.VLLM_XLA_CHECK_RECOMPILATION
 
-        # SPMD Related - XLA GPU supports SPMD differently than TPU
+        # SPMD Related - XLA GPU supports SPMD same with TPU
         self.use_spmd = envs.VLLM_XLA_USE_SPMD
         if self.use_spmd:
             num_devices = xr.global_runtime_device_count()
-            # For XLA GPU, we typically use 1D mesh for tensor parallelism
-            mesh_shape = (num_devices,) if num_devices > 1 else (1,)
+            mesh_shape = (num_devices, 1)
             device_ids = np.array(range(num_devices))
-            self.mesh = xs.Mesh(device_ids, mesh_shape, ('x',))
+            logger.info(f'total {num_devices} devices, mesh_shape: {mesh_shape}, device_ids: {device_ids}')
+            self.mesh = xs.Mesh(device_ids, mesh_shape, ('x', 'y'))
 
         self.enforce_eager = model_config.enforce_eager
 
