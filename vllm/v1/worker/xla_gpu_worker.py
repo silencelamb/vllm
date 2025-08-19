@@ -338,7 +338,7 @@ class XlaGpuWorker:
             rank=rank,
             local_rank=local_rank,
             distributed_init_method=distributed_init_method,
-            backend=current_platform.dist_backend,  # Usually "nccl" for GPU
+            backend=current_platform.dist_backend,  # "gloo" for XLA GPU
         )
         
         # Ensure model parallel is initialized

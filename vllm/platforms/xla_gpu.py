@@ -32,7 +32,7 @@ class XlaGpuPlatform(Platform):
     device_type: str = "xla"
     dispatch_key: str = "XLA"
     ray_device_key: str = "XLA_GPU"
-    dist_backend: str = "NCCL"
+    dist_backend: str = "gloo"
     device_control_env_var: str = "CUDA_VISIBLE_DEVICES"
     simple_compile_backend: str = "openxla"
 

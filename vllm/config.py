@@ -2031,6 +2031,8 @@ class ParallelConfig:
                 backend = "uni"
             elif current_platform.is_tpu() and envs.VLLM_XLA_USE_SPMD:
                 backend = "uni"
+            elif current_platform.is_xla_gpu() and envs.VLLM_XLA_USE_SPMD:
+                backend = "uni"
             elif (current_platform.is_cuda()
                   and cuda_device_count_stateless() < self.world_size):
                 if not ray_found:
