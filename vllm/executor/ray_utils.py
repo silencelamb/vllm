@@ -383,6 +383,32 @@ def get_num_tpu_nodes() -> int:
     return total_tpus // tpus_per_node
 
 
+def get_num_xla_gpu_nodes() -> int:
+    """Get the number of nodes with XLA GPU devices in the Ray cluster.
+    
+    For XLA GPU, we use CUDA GPUs but with XLA compilation backend.
+    This function counts the number of nodes that have GPU resources.
+    """
+    cluster_resources = ray.cluster_resources()
+    
+    # XLA GPU uses regular CUDA GPUs, so check for GPU resources
+    if "GPU" in cluster_resources:
+        total_gpus = int(cluster_resources["GPU"])
+        # Get GPUs per node from the current node
+        import torch
+        if torch.cuda.is_available():
+            gpus_per_node = torch.cuda.device_count()
+        else:
+            # Fallback: assume single GPU per node if we can't detect
+            gpus_per_node = 1
+        
+        if total_gpus % gpus_per_node == 0:
+            return total_gpus // gpus_per_node
+    
+    # If no GPU resources found or cannot determine, return 1 (single node)
+    return 1
+
+
 def get_num_nodes_in_placement_group() -> int:
     pg_table = ray.util.placement_group_table()
     current_pg = ray.util.get_current_placement_group()

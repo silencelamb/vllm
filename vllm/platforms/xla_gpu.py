@@ -172,7 +172,7 @@ class XlaGpuPlatform(Platform):
 
     @classmethod
     def get_device_communicator_cls(cls) -> str:
-        return "vllm.distributed.device_communicators.tpu_communicator.TpuCommunicator"  # noqa
+        return "vllm.distributed.device_communicators.xla_gpu_communicator.XlaGpuCommunicator"  # noqa
 
     @classmethod
     def use_all_gather(cls) -> bool:
