@@ -297,6 +297,7 @@ def test_xla_gpu_compilation_simple():
 
     # 强制使用特定的启动方法
     os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"  # 使用 spawn 而不是 fork
+    # 否则会报错 Status: INTERNAL: CUDA error: Failed setting context: CUDA_ERROR_NOT_INITIALIZED: initialization error
     # os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "fork"
     # os.environ["VLLM_USE_RAY_COMPILED_DAG"] = "0"
 
