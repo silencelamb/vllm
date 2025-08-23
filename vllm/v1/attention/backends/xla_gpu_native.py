@@ -537,8 +537,10 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 k_scale=getattr(layer, "_k_scale", None),
                 v_scale=getattr(layer, "_v_scale", None),
             )
-            # key_cache.copy_(new_key_cache)
-            # value_cache.copy_(new_value_cache)
+            # new_key_cache.copy_(key_cache)
+            # new_value_cache.copy_(value_cache)
+            key_cache.copy_(new_key_cache)
+            value_cache.copy_(new_value_cache)
         seq_lens_to_use = (
             attn_metadata.seq_lens_tensor
             if attn_metadata.seq_lens_tensor is not None

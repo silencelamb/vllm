@@ -21,8 +21,20 @@ Usage:
 
 import glob
 import os
+# Log device type
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
+os.environ['TF_CPP_VMODULE'] = 'pjrt_registry=5'
 
-import os
+from torch_xla.experimental import plugins
+import torch_xla_cuda_plugin
+import torch_xla.core.xla_model as xm
+import torch_xla.runtime as xr
+
+# Use dynamic plugin instead of built-in CUDA support
+plugins.use_dynamic_plugins()
+plugins.register_plugin('CUDA', torch_xla_cuda_plugin.CudaPlugin())
+xr.set_device_type('CUDA')
+
 # 在任何 import 之前设置
 os.environ["XLA_FLAGS"] = "--xla_dump_to=/code/github_code/xla_vllm/vllm/tests/xla_gpu/xla_dump --xla_dump_hlo_as_text"
 os.environ["XLA_HLO_DEBUG"] = "1"
