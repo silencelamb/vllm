@@ -54,7 +54,7 @@ def reshape_and_cache_flash_impl(
     k_scale: torch.Tensor,
     v_scale: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Implementation that returns new tensors (like TPU)."""
+    """Implementation for in-place cache update."""
     # Extract dimensions
     num_tokens = key.shape[0]
     num_heads = key.shape[1]
@@ -70,26 +70,13 @@ def reshape_and_cache_flash_impl(
     has_k_scale = k_scale is not None
     has_v_scale = v_scale is not None
     
-    # Create descriptor
-    # descriptor = struct.pack(
-    #     'qqqqqibb',
-    #     num_tokens,
-    #     num_kv_heads,
-    #     head_size,
-    #     num_blocks,
-    #     block_size,
-    #     kv_cache_dtype_int,
-    #     1 if has_k_scale else 0,
-    #     1 if has_v_scale else 0
-    # )
-
     # Format: "dtype_str|num_tokens|num_heads|head_size|num_blocks|block_size|has_k_scale|has_v_scale"
     descriptor_str = f"{kv_cache_dtype}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
     descriptor = descriptor_str.encode('utf-8')
     
-    # XLA custom call buffer ordering for GPU:
-    # IMPORTANT: On GPU, the LAST num_outputs buffers are outputs!
-    # For in-place operations, we pass the cache buffers as both input and output
+    # XLA custom call buffer ordering for GPU with in-place:
+    # For true in-place, we use the same buffers as both input and output
+    # The CUDA kernel modifies the cache buffers directly
     
     # Order: inputs first, then outputs at the end
     buffers = [key, value, key_cache, value_cache, slot_mapping]  # inputs
@@ -97,39 +84,32 @@ def reshape_and_cache_flash_impl(
         buffers.append(k_scale)
     if has_v_scale:
         buffers.append(v_scale)
-    # Add outputs at the end (same tensors as input caches for in-place)
-    buffers.extend([key_cache, value_cache])  # outputs (last 2)
+    # CRITICAL: For in-place, outputs ARE the same cache tensors
+    buffers.extend([key_cache, value_cache])  # outputs (same as input caches)
     
     # Call XLA custom op
-    # Note: The LAST 2 buffers in the list are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
         "vllm_reshape_and_cache_flash",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
-        True,  # has_side_effect - this operation modifies the cache buffers
+        True,  # has_side_effect - this is an in-place operation
         descriptor,
         2,  # api_version
         {}
     )
     
-    # This is important: XLA custom call returns the outputs in the same order as inputs
-    # So we need to extract the last 2 tensors as outputs
-    # return key_cache, value_cache
+    # Return the same cache tensors (they've been modified in-place)
+    # The XLA compiler will recognize these are the same buffers
     return outputs
 
 
-# Define the operation that returns new tensors
-# XLA_LIB.define(
-#     "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
-#     "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-#     "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
-# )
-
+# Define the operation with alias annotations for in-place update
+# The (a!) and (b!) annotations indicate that the outputs alias the inputs
 XLA_LIB.define(
-    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
-    "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-    "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
+    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
+    "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
+    "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
 )
 
 
@@ -152,41 +132,30 @@ def reshape_and_cache_update_op_fake(
     return out_k, out_v
 
 def test_torch_compile():
-    """Test torch.compile compatibility."""
+    """Test torch.compile with in-place buffer donation."""
     print("\n" + "="*60)
-    print("Testing torch.compile with TPU-style approach")
+    print("Testing torch.compile with in-place buffer donation")
     print("="*60)
     
     device = xm.xla_device()
     
     @torch.compile(backend="openxla")
     def compiled_update(key, value, key_cache, value_cache, slot_mapping):
-        # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-        # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
-        # Create scale tensors (1.0 means no scaling)
-        # k_scale = torch.ones(1, dtype=torch.float32, device=device)
-        # v_scale = torch.ones(1, dtype=torch.float32, device=device)
         k_scale = None
         v_scale = None
         
-        # Get new caches
+        # Call the in-place update op
         new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
-        # print(key_cache, value_cache)
-        # NOTE: Following TPU pattern - the in-place copy will be optimized away by XLA compiler
-        # Since our custom op returns the modified caches (workaround for XLA GPU issue),
-        # this copy is essentially a no-op but maintains compatibility with TPU pattern
-
-        # new_value_cache.copy_(value_cache)
-        # new_key_cache.copy_(key_cache)
         
-        # value_cache.copy_(new_value_cache)
-        # key_cache.copy_(new_key_cache)
-
-        return new_key_cache, new_value_cache
-        # return key_cache, value_cache
+        # Following the TPU pattern: copy_ will be optimized away by XLA
+        # This tells XLA to use the modified buffers
+        key_cache.copy_(new_key_cache)
+        value_cache.copy_(new_value_cache)
+        
+        return key_cache, value_cache
     
     # Test
     key = torch.randn(1, 1, 1, device=device).contiguous()
@@ -196,23 +165,23 @@ def test_torch_compile():
     slot_mapping = torch.tensor([0], dtype=torch.int64, device=device)
     
     try:
-        # 关键点： donate和copy_ 都在compile之外  或者 都不加
-        # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-        # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
-        new_key_cache, new_value_cache = compiled_update(key, value, key_cache, value_cache, slot_mapping)
-        # value_cache.copy_(new_value_cache)
-        # key_cache.copy_(new_key_cache)
-
-        # new_value_cache.copy_(value_cache)
-        # new_key_cache.copy_(key_cache)
+        # Set buffer donors BEFORE compilation - this is critical!
+        # This tells XLA that these buffers can be reused for outputs
+        torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
+        torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
+        
+        # Call the compiled function
+        result_key_cache, result_value_cache = compiled_update(key, value, key_cache, value_cache, slot_mapping)
         
         xm.mark_step()
         xm.wait_device_ops()
         
-        # import pdb; pdb.set_trace()
-        print(f"new_key_cache: {new_key_cache}, new_value_cache: {new_value_cache}")
-        print(f"key_cache: {key_cache}, value_cache: {value_cache}")
-        print(f"✓ torch.compile test completed")
+        # Verify in-place update (result should be same tensors)
+        print(f"In-place check: key_cache is result_key_cache: {key_cache is result_key_cache}")
+        print(f"In-place check: value_cache is result_value_cache: {value_cache is result_value_cache}")
+        print(f"key_cache values: {key_cache}")
+        print(f"value_cache values: {value_cache}")
+        print(f"✓ torch.compile test completed with in-place update")
         
     except Exception as e:
         print(f"✗ torch.compile test failed: {e}")
@@ -287,48 +256,38 @@ def test_comparison_with_vllm():
     
     @torch.compile(backend="openxla")
     def compiled_update(key, value, key_cache, value_cache, slot_mapping):
-        # Create scale tensors (1.0 means no scaling)
-        # k_scale = torch.ones(1, dtype=torch.float32, device=device)
-        # v_scale = torch.ones(1, dtype=torch.float32, device=device)
-        # torch.ops.xla.dynamo_set_buffer_donor_(key_cache, True)
-        # torch.ops.xla.dynamo_set_buffer_donor_(value_cache, True)
         k_scale = None
         v_scale = None
         
-        # Get new caches
+        # Call the in-place update op
         new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_update_op(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
-
-        # value_cache.copy_(new_value_cache)
-        # key_cache.copy_(new_key_cache)
         
-        # new_value_cache.copy_(value_cache)
-        # new_key_cache.copy_(key_cache)
-
-        # return key_cache, value_cache
-        return new_key_cache, new_value_cache
+        # Following the TPU pattern: copy_ will be optimized away by XLA
+        key_cache.copy_(new_key_cache)
+        value_cache.copy_(new_value_cache)
+        
+        return key_cache, value_cache
     
-    # 关键点： donate和copy_ 都在compile之外 或者 都不加
-    # torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
-    # torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
-    compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
+    # Set buffer donors BEFORE compilation
+    torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
+    torch.ops.xla.dynamo_set_buffer_donor_(value_cache_xla, True)
     
-    # Now copy the materialized results
-    # value_cache_xla.copy_(new_value_cache)
-    # key_cache_xla.copy_(new_key_cache)
+    # Call the compiled function
+    result_key_cache, result_value_cache = compiled_update(key_xla, value_xla, key_cache_xla, value_cache_xla, slot_mapping_xla)
     
-    # new_value_cache.copy_(value_cache_xla)
-    # new_key_cache.copy_(key_cache_xla)
-    
-    
-    # Mark step again after copy
+    # No additional copy needed - the caches were updated in-place
+    # Mark step to execute
     xm.mark_step()
     xm.wait_device_ops()
     
     # Compare results
     print("\n3. Comparing results...")
+    print(f"XLA: In-place update - key_cache is result: {key_cache_xla is result_key_cache}")
+    print(f"XLA: In-place update - value_cache is result: {value_cache_xla is result_value_cache}")
+    
     # Move XLA results back to CPU for comparison
     key_cache_xla_cpu = key_cache_xla.cpu()
     value_cache_xla_cpu = value_cache_xla.cpu()
@@ -377,9 +336,10 @@ def main():
     print("TPU-style solution for reshape_and_cache_flash")
     print("="*60)
     print("\nThis approach:")
-    print("1. Returns new tensors (avoiding alias annotations)")
-    print("2. Uses buffer donor optimization (if supported)")
-    print("3. XLA compiler optimizes away the copy")
+    print("1. Uses alias annotations for in-place operations")
+    print("2. Sets buffer donors before compilation")
+    print("3. XLA compiler optimizes away the copy_ operations")
+    print("4. Achieves true in-place update like vLLM's native kernel")
     
     # Setup
     setup_custom_call()
