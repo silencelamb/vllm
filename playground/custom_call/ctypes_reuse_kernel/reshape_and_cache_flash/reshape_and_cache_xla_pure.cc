@@ -149,12 +149,20 @@ void reshape_and_cache_flash_xla_custom_call(
     int out_buffer_idx = buffer_idx;
     printf("buffer[2]: %p, buffer[%d]: %p\n", buffers[2], out_buffer_idx, buffers[out_buffer_idx]);
     // Create tensor wrappers for caches (output)
+    if (buffers[out_buffer_idx] != buffers[2]) {
+        printf("Warning: key_cache buffer address mismatch! Force to use input key_cache\n");
+        buffers[out_buffer_idx] = buffers[2];
+    }
     torch::Tensor key_cache = torch::from_blob(
         buffers[out_buffer_idx++],
         {num_blocks, block_size, num_heads, head_size},
         torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
     );
     printf("buffer[3]: %p, buffer[%d]: %p\n", buffers[3], out_buffer_idx, buffers[out_buffer_idx]);
+    if (buffers[out_buffer_idx] != buffers[3]) {
+        printf("Warning: key_cache buffer address mismatch! Force to use input value_cache\n");
+        buffers[out_buffer_idx] = buffers[3];
+    }
     torch::Tensor value_cache = torch::from_blob(
         buffers[out_buffer_idx++],
         {num_blocks, block_size, num_heads, head_size},

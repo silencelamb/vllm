@@ -85,7 +85,7 @@ def reshape_and_cache_flash_impl(
     if has_v_scale:
         buffers.append(v_scale)
     # CRITICAL: For in-place, outputs ARE the same cache tensors
-    buffers.extend([key_cache, value_cache])  # outputs (same as input caches)
+    # buffers.extend([key_cache, value_cache])  # outputs (same as input caches)
     
     # Call XLA custom op
     outputs = torch_xla._XLAC._xla_custom_call(
@@ -93,9 +93,9 @@ def reshape_and_cache_flash_impl(
         "vllm_reshape_and_cache_flash",
         [list(key_cache.shape), list(value_cache.shape)],
         [key_cache.dtype, value_cache.dtype],
-        True,  # has_side_effect - this is an in-place operation
+        False,  # has_side_effect - this is an in-place operation
         descriptor,
-        2,  # api_version
+        1,  # api_version
         {}
     )
     
@@ -104,13 +104,20 @@ def reshape_and_cache_flash_impl(
     return outputs
 
 
+
+XLA_LIB.define(
+    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor key_cache, "
+    "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
+    "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
+)
+
 # Define the operation with alias annotations for in-place update
 # The (a!) and (b!) annotations indicate that the outputs alias the inputs
-XLA_LIB.define(
-    "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
-    "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-    "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
-)
+# XLA_LIB.define(
+#     "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
+#     "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
+#     "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
+# )
 
 
 # Implementation for XLA
@@ -152,8 +159,8 @@ def test_torch_compile():
         
         # Following the TPU pattern: copy_ will be optimized away by XLA
         # This tells XLA to use the modified buffers
-        key_cache.copy_(new_key_cache)
-        value_cache.copy_(new_value_cache)
+        # key_cache.copy_(new_key_cache)
+        # value_cache.copy_(new_value_cache)
         
         return key_cache, value_cache
     
@@ -266,8 +273,8 @@ def test_comparison_with_vllm():
         )
         
         # Following the TPU pattern: copy_ will be optimized away by XLA
-        key_cache.copy_(new_key_cache)
-        value_cache.copy_(new_value_cache)
+        # key_cache.copy_(new_key_cache)
+        # value_cache.copy_(new_value_cache)
         
         return key_cache, value_cache
     
