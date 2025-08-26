@@ -96,15 +96,14 @@ def reshape_and_cache_flash_impl(
     block_size = key_cache.shape[1]
 
     # Map dtype
-    dtype_map = {"auto": 0, "float32": 0, "float16": 1, "bfloat16": 2}
-    kv_cache_dtype_int = dtype_map.get(kv_cache_dtype, 0)
+    key_dtype_str = str(key.dtype).split('.')[-1].lower()
 
     # Check scales
     has_k_scale = k_scale is not None
     has_v_scale = v_scale is not None
 
     # Format: "dtype_str|num_tokens|num_heads|head_size|num_blocks|block_size|has_k_scale|has_v_scale"
-    descriptor_str = f"{kv_cache_dtype}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
+    descriptor_str = f"{kv_cache_dtype}|{key_dtype_str}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
     descriptor = descriptor_str.encode("utf-8")
 
     # XLA custom call buffer ordering for GPU:
@@ -117,16 +116,14 @@ def reshape_and_cache_flash_impl(
         buffers.append(k_scale)
     if has_v_scale:
         buffers.append(v_scale)
-    # Add outputs at the end (same tensors as input caches for in-place)
-    buffers.extend([key_cache, value_cache])  # outputs (last 2)
 
     # Call XLA custom op
     # Note: The LAST 2 buffers in the list are outputs
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
         "vllm_reshape_and_cache_flash_xxx",
-        [list(key_cache.shape), list(value_cache.shape)],
-        [key_cache.dtype, value_cache.dtype],
+        [[1]],
+        [torch.bool],
         True,  # has_side_effect - this operation modifies the cache buffers
         descriptor,
         1,  # api_version
@@ -136,13 +133,13 @@ def reshape_and_cache_flash_impl(
     # This is important: XLA custom call returns the outputs in the same order as inputs
     # So we need to extract the last 2 tensors as outputs
     # return key_cache, value_cache
-    return outputs
+    return outputs[0]
 
 
 XLA_LIB.define(
     "reshape_and_cache_flash(Tensor key, Tensor value, Tensor key_cache, "
     "Tensor value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-    "Tensor? k_scale, Tensor? v_scale) -> (Tensor, Tensor)"
+    "Tensor? k_scale, Tensor? v_scale) -> Tensor"
 )
 
 
@@ -156,7 +153,8 @@ def reshape_and_cache_flash_composite(
     key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
     # 为了形状推导
-    return key_cache.clone(), value_cache.clone()
+    # return key_cache.clone(), value_cache.clone()
+    return torch.ones(1, dtype=torch.bool, device=key.device)
 
 
 def flash_attn_varlen_xla_impl(
@@ -527,7 +525,7 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
         if self.kv_sharing_target_layer_name is None:
             # Only update cache if not sharing with another layer
             num_actual_tokens = attn_metadata.num_actual_tokens
-            new_key_cache, new_value_cache = torch.ops.xla.reshape_and_cache_flash(
+            outputs = torch.ops.xla.reshape_and_cache_flash(
                 key[:num_actual_tokens],
                 value[:num_actual_tokens],
                 key_cache,
@@ -537,10 +535,14 @@ class XlaGpuPagedAttentionBackendImpl(AttentionImpl):
                 k_scale=getattr(layer, "_k_scale", None),
                 v_scale=getattr(layer, "_v_scale", None),
             )
-            # new_key_cache.copy_(key_cache)
-            # new_value_cache.copy_(value_cache)
-            key_cache.copy_(new_key_cache)
-            value_cache.copy_(new_value_cache)
+            # 这里推荐 index_put（更灵活）
+            idx = (torch.tensor([0], device=key_cache.device),
+                torch.tensor([0], device=key_cache.device),
+                torch.tensor([0], device=key_cache.device),
+                torch.tensor([0], device=key_cache.device))
+
+            key_cache.index_put_(idx, outputs[0] * key_cache[idx])
+            value_cache.index_put_(idx, outputs[0] * value_cache[idx])
         seq_lens_to_use = (
             attn_metadata.seq_lens_tensor
             if attn_metadata.seq_lens_tensor is not None

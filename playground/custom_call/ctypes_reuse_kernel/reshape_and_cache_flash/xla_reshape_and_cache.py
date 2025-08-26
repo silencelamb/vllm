@@ -54,14 +54,16 @@ def reshape_and_cache_flash_xla_impl(
     num_blocks = key_cache.shape[0]
     block_size = key_cache.shape[1]
 
-    # Check if scales are provided
+    # Map dtype
+    key_dtype_str = str(key.dtype).split('.')[-1].lower()
+
+    # Check scales
     has_k_scale = k_scale is not None
     has_v_scale = v_scale is not None
-
-    # Create descriptor
+    
     # Format: "dtype_str|num_tokens|num_heads|head_size|num_blocks|block_size|has_k_scale|has_v_scale"
-    descriptor_str = f"{kv_cache_dtype}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
-    descriptor = descriptor_str.encode("utf-8")
+    descriptor_str = f"{kv_cache_dtype}|{key_dtype_str}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
+    descriptor = descriptor_str.encode('utf-8')
 
     # Prepare buffers
     buffers = [key, value, key_cache, value_cache, slot_mapping]

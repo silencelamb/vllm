@@ -65,6 +65,7 @@ void reshape_and_cache_flash_xla_custom_call(
     
     // Parse parameters
     std::string kv_cache_dtype = next_token();
+    std::string key_dtype = next_token();
     int64_t num_tokens = std::stoll(next_token());
     int64_t num_heads = std::stoll(next_token());
     int64_t head_size = std::stoll(next_token());
@@ -75,6 +76,7 @@ void reshape_and_cache_flash_xla_custom_call(
     
     printf("Parsed parameters:\n");
     printf("  kv_cache_dtype: %s\n", kv_cache_dtype.c_str());
+    printf("  key_dtype: %s\n", key_dtype.c_str());
     printf("  num_tokens: %lld\n", num_tokens);
     printf("  num_heads: %lld\n", num_heads);
     printf("  head_size: %lld\n", head_size);
@@ -84,14 +86,14 @@ void reshape_and_cache_flash_xla_custom_call(
     printf("  has_v_scale: %d\n", has_v_scale);
 
     // Determine data type
-    auto dtype = at::kFloat;
-    if (kv_cache_dtype == "half" || kv_cache_dtype == "float16") {
+    auto dtype = at::kBFloat16;
+    if (key_dtype == "half" || key_dtype == "float16") {
         dtype = at::kHalf;
-    } else if (kv_cache_dtype == "bfloat16") {
+    } else if (key_dtype == "bfloat16") {
         dtype = at::kBFloat16;
-    } else if (kv_cache_dtype == "float8_e4m3fn") {
+    } else if (key_dtype == "float8_e4m3fn") {
         dtype = at::kFloat8_e4m3fn;
-    } else if (kv_cache_dtype == "float8_e5m2") {
+    } else if (key_dtype == "float8_e5m2") {
         dtype = at::kFloat8_e5m2;
     }
     
@@ -116,7 +118,19 @@ void reshape_and_cache_flash_xla_custom_call(
         {num_tokens, num_heads, head_size},
         torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
     );
-    
+
+    torch::Tensor key_cache = torch::from_blob(
+        buffers[2],
+        {num_blocks, block_size, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+
+    torch::Tensor value_cache = torch::from_blob(
+        buffers[3],
+        {num_blocks, block_size, num_heads, head_size},
+        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    );
+
     torch::Tensor slot_mapping = torch::from_blob(
         buffers[4],
         {num_tokens},
@@ -147,28 +161,13 @@ void reshape_and_cache_flash_xla_custom_call(
         v_scale = torch::ones({1}, torch::TensorOptions().dtype(torch::kFloat).device(torch::kCUDA));
     }
     int out_buffer_idx = buffer_idx;
-    printf("buffer[2]: %p, buffer[%d]: %p\n", buffers[2], out_buffer_idx, buffers[out_buffer_idx]);
-    // Create tensor wrappers for caches (output)
-    if (buffers[out_buffer_idx] != buffers[2]) {
-        printf("Warning: key_cache buffer address mismatch! Force to use input key_cache\n");
-        buffers[out_buffer_idx] = buffers[2];
-    }
-    torch::Tensor key_cache = torch::from_blob(
-        buffers[out_buffer_idx++],
-        {num_blocks, block_size, num_heads, head_size},
-        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
+    torch::Tensor output = torch::from_blob(
+        buffers[out_buffer_idx],
+        {1},
+        torch::TensorOptions().dtype(torch::kBool).device(torch::kCUDA)
     );
-    printf("buffer[3]: %p, buffer[%d]: %p\n", buffers[3], out_buffer_idx, buffers[out_buffer_idx]);
-    if (buffers[out_buffer_idx] != buffers[3]) {
-        printf("Warning: key_cache buffer address mismatch! Force to use input value_cache\n");
-        buffers[out_buffer_idx] = buffers[3];
-    }
-    torch::Tensor value_cache = torch::from_blob(
-        buffers[out_buffer_idx++],
-        {num_blocks, block_size, num_heads, head_size},
-        torch::TensorOptions().dtype(dtype).device(torch::kCUDA)
-    );
-
+    output.fill_(true);
+    
     printf("  Key cache shape: %s\n", shape_to_string(key_cache.sizes().vec()).c_str());
     printf("  Value cache shape: %s\n", shape_to_string(value_cache.sizes().vec()).c_str());
     printf("  Key shape: %s\n", shape_to_string(key.sizes().vec()).c_str());

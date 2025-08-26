@@ -10,7 +10,7 @@ import struct
 from torch.library import Library
 import numpy as np
 from torch_xla.experimental.custom_kernel import XLA_LIB
-from torch.library import register_fake
+from torch.library import register_fake, impl
 
 # Try to import vLLM's reshape_and_cache_flash for comparison
 try:
@@ -63,15 +63,15 @@ def reshape_and_cache_flash_impl(
     block_size = key_cache.shape[1]
     
     # Map dtype
-    dtype_map = {"auto": 0, "float32": 0, "float16": 1, "bfloat16": 2}
-    kv_cache_dtype_int = dtype_map.get(kv_cache_dtype, 0)
+    key_dtype_str = str(key.dtype).split('.')[-1].lower()
+
     
     # Check scales
     has_k_scale = k_scale is not None
     has_v_scale = v_scale is not None
     
     # Format: "dtype_str|num_tokens|num_heads|head_size|num_blocks|block_size|has_k_scale|has_v_scale"
-    descriptor_str = f"{kv_cache_dtype}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
+    descriptor_str = f"{kv_cache_dtype}|{key_dtype_str}|{num_tokens}|{num_heads}|{head_size}|{num_blocks}|{block_size}|{int(has_k_scale)}|{int(has_v_scale)}"
     descriptor = descriptor_str.encode('utf-8')
     
     # Approach: Return cache tensors but mark operation as in-place
@@ -83,30 +83,23 @@ def reshape_and_cache_flash_impl(
     if has_v_scale:
         buffers.append(v_scale)
     
-    # Add outputs - same as input caches for in-place
-    buffers.extend([key_cache, value_cache])
     
     # Call XLA custom op 
     outputs = torch_xla._XLAC._xla_custom_call(
         buffers,
         "vllm_reshape_and_cache_flash",
-        [list(key_cache.shape), list(value_cache.shape)],
-        [key_cache.dtype, value_cache.dtype],
+        [[1]],
+        [torch.bool],
         True,  # has_side_effect - critical for in-place
         descriptor,
         2,  # api_version
         {}
     )
+    print(f"output[0] shape: f{outputs[0].shape}, dtype: {outputs[0].dtype}")
+    key_cache[0] = outputs[0] * key_cache[0]
+    value_cache[0] = outputs[0] * value_cache[0]
     
-    # Create a dummy scalar that depends on the operation
-    # This ensures the operation is executed
-    # We use the first element of key_cache as a dependency marker
-    if isinstance(outputs, (list, tuple)):
-        dummy = outputs[0].flatten()[0] * 0.0 + 1.0  # Always 1.0 but depends on cache
-    else:
-        dummy = torch.tensor(1.0, device=key.device)
-    
-    return dummy
+    return outputs[0]
 
 
 
@@ -117,27 +110,18 @@ XLA_LIB.define(
     "Tensor? k_scale, Tensor? v_scale) -> Tensor"
 )
 
-# Define the operation with alias annotations for in-place update
-# The (a!) and (b!) annotations indicate that the outputs alias the inputs
-# XLA_LIB.define(
-#     "reshape_and_cache_update_op(Tensor key, Tensor value, Tensor(a!) key_cache, "
-#     "Tensor(b!) value_cache, Tensor slot_mapping, str kv_cache_dtype, "
-#     "Tensor? k_scale, Tensor? v_scale) -> (Tensor(a!), Tensor(b!))"
-# )
-
 
 # Implementation for XLA
 XLA_LIB.impl("reshape_and_cache_update_op", reshape_and_cache_flash_impl, "XLA")
 
 
-# Fake implementation for meta tensors
-@register_fake("xla::reshape_and_cache_update_op")
-def reshape_and_cache_update_op_fake(
-    key, value, key_cache, value_cache, slot_mapping,
-    kv_cache_dtype, k_scale, v_scale
+@impl(XLA_LIB, "reshape_and_cache_update_op", "CompositeExplicitAutograd")
+def reshape_and_cache_flash_composite(
+    key, value, key_cache, value_cache, slot_mapping, kv_cache_dtype, k_scale, v_scale
 ):
-    # Return dummy scalar tensor for meta device
-    return torch.empty([], dtype=torch.float32, device="meta")
+    # 为了形状推导
+    # return key_cache.clone(), value_cache.clone()
+    return torch.ones(1, dtype=torch.bool, device=key.device)  # Dummy return
 
 def test_torch_compile():
     """Test torch.compile with in-place buffer donation."""
@@ -153,23 +137,36 @@ def test_torch_compile():
         v_scale = None
         
         # Call the in-place update op - returns dummy scalar
-        dummy_result = torch.ops.xla.reshape_and_cache_update_op(
+        outputs = torch.ops.xla.reshape_and_cache_update_op(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
+        # 不work
+        # key_cache[0,0,0] = outputs[0] * key_cache[0,0,0]
+        # value_cache[0,0,0] = outputs[0] * value_cache[0,0,0]
+
+        # work
+        # key_cache[0] = outputs[0] * key_cache[0]
+        # value_cache[0] = outputs[0] * value_cache[0]
+        # key_cache.view(-1)[0] = key_cache.view(-1)[0] *  outputs[0]
+    
+        # 这里推荐 index_put（更灵活）
+        idx = (torch.tensor([0], device=key_cache.device),
+               torch.tensor([0], device=key_cache.device),
+               torch.tensor([0], device=key_cache.device),
+               torch.tensor([0], device=key_cache.device))
+
+        key_cache.index_put_(idx, outputs[0] * key_cache[idx])
+        value_cache.index_put_(idx, outputs[0] * value_cache[idx])
         
-        # Use the dummy scalar to establish dependency
-        # This ensures the operation is executed in the graph
-        # The caches are modified in-place
-        with_dependency = key_cache + (dummy_result - dummy_result)  # Adds 0 but creates dependency
         
         return key_cache, value_cache
     
     # Test
-    key = torch.randn(1, 1, 1, device=device).contiguous()
-    value = torch.randn(1, 1, 1, device=device).contiguous()
-    key_cache = torch.zeros(1, 2, 1, 1, device=device).contiguous()
-    value_cache = torch.zeros(1, 2, 1, 1, device=device).contiguous()
+    key = torch.randn(1, 1, 1, dtype=torch.bfloat16, device=device).contiguous()
+    value = torch.randn(1, 1, 1, dtype=torch.bfloat16, device=device).contiguous()
+    key_cache = torch.zeros(1, 2, 1, 1, dtype=torch.bfloat16, device=device).contiguous()
+    value_cache = torch.zeros(1, 2, 1, 1, dtype=torch.bfloat16, device=device).contiguous()
     slot_mapping = torch.tensor([0], dtype=torch.int64, device=device)
     
     try:
@@ -185,6 +182,8 @@ def test_torch_compile():
         xm.wait_device_ops()
         
         # Verify in-place update
+        print(f"key before update: {key}")
+        print(f"value before update: {value}")
         print(f"key_cache after update: {key_cache}")
         print(f"value_cache after update: {value_cache}")
         print(f"✓ torch.compile test completed with in-place update via dummy dependency")
@@ -217,10 +216,10 @@ def test_comparison_with_vllm():
     block_size = 16
     
     # Initialize tensors on CUDA for vLLM
-    key_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
-    value_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
-    key_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
-    value_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.float32).contiguous()
+    key_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.bfloat16).contiguous()
+    value_cuda = torch.randn(num_tokens, num_kv_heads, head_size, device=cuda_device, dtype=torch.bfloat16).contiguous()
+    key_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.bfloat16).contiguous()
+    value_cache_cuda = torch.zeros(num_blocks, block_size, num_kv_heads, head_size, device=cuda_device, dtype=torch.bfloat16).contiguous()
     slot_mapping_cuda = torch.tensor([0, 1, 16, 17], dtype=torch.int64, device=cuda_device)
     
     # Clone for XLA (convert to XLA device)
@@ -266,19 +265,23 @@ def test_comparison_with_vllm():
         v_scale = None
         
         # Call the in-place update op - returns dummy scalar
-        dummy_result = torch.ops.xla.reshape_and_cache_update_op(
+        outputs = torch.ops.xla.reshape_and_cache_update_op(
             key, value, key_cache, value_cache,
             slot_mapping, "auto", k_scale, v_scale
         )
+        # key_cache[0] = outputs[0] * key_cache[0]
+        # value_cache[0] = outputs[0] * value_cache[0]
+
+        # 这里推荐 index_put（更灵活）
+        idx = (torch.tensor([0], device=key_cache.device),
+               torch.tensor([0], device=key_cache.device),
+               torch.tensor([0], device=key_cache.device),
+               torch.tensor([0], device=key_cache.device))
+
+        key_cache.index_put_(idx, outputs[0] * key_cache[idx])
+        value_cache.index_put_(idx, outputs[0] * value_cache[idx])
         
-        # Use the dummy scalar to establish dependency
-        # The actual update happens in-place on the cache tensors
-        # Add zero to key_cache to create dependency without changing values
-        key_cache_with_dep = key_cache + (dummy_result * 0.0)
-        
-        # Return the in-place modified caches
-        # The dummy dependency ensures the op executes
-        return key_cache_with_dep, value_cache
+        return key_cache, value_cache
     
     # Set buffer donors BEFORE compilation
     torch.ops.xla.dynamo_set_buffer_donor_(key_cache_xla, True)
